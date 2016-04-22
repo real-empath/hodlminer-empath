@@ -2,6 +2,7 @@
 #include <openssl/evp.h>
 #include <openssl/sha.h>
 #include <x86intrin.h>
+#include <emmintrin.h>
 
 #include "hodl.h"
 #include "miner.h"
@@ -28,44 +29,55 @@ void Rev256(uint32_t *Dest, const uint32_t *Src)
 int scanhash_hodl(int threadNumber, int totalThreads, uint32_t *pdata, const CacheEntry *Garbage, const uint32_t *ptarget, unsigned long *hashes_done)
 {
     uint32_t CollisionCount = 0;
-    CacheEntry Cache;
+    CacheEntry Cache[AES_PARALLEL_N];
+
+    __m128i* ciphertexts[AES_PARALLEL_N];
+    const __m128i* plaintexts[AES_PARALLEL_N];
+
+    for(int n=0; n<AES_PARALLEL_N; ++n) {
+        ciphertexts[n] = Cache[n].dqwords;
+        plaintexts[n] = Cache[n].dqwords;
+    }
 
     // Search for pattern in psuedorandom data
     int searchNumber = COMPARE_SIZE / totalThreads;
     int startLoc = threadNumber * searchNumber;
 
-    for(int32_t k = startLoc; k < startLoc + searchNumber && !work_restart[threadNumber].restart; k++)
+    for(int32_t k = startLoc; k < startLoc + searchNumber && !work_restart[threadNumber].restart; k+=AES_PARALLEL_N)
     {
         // copy data to first l2 cache
-        memcpy(Cache.dwords, Garbage + k, GARBAGE_SLICE_SIZE);
+        for (int n=0; n<AES_PARALLEL_N; ++n)
+            memcpy(Cache[n].dwords, Garbage + k + n, GARBAGE_SLICE_SIZE);
 
-        for(int j = 0; j < AES_ITERATIONS; j++)
+        for(int j = 0; j < AES_ITERATIONS; ++j)
         {
-            __m128i ExpKey[16];
+            __m128i ExpKey[AES_PARALLEL_N][16];
+            __m128i ivs[AES_PARALLEL_N];
 
             // use last 4 bytes of first cache as next location
-            uint32_t nextLocation = Cache.dwords[(GARBAGE_SLICE_SIZE >> 2) - 1] & (COMPARE_SIZE - 1); //% COMPARE_SIZE;
-            const CacheEntry* next = &Garbage[nextLocation];
+            for(int n=0; n<AES_PARALLEL_N; ++n) {
+                uint32_t nextLocation = Cache[n].dwords[(GARBAGE_SLICE_SIZE >> 2) - 1] & (COMPARE_SIZE - 1); //% COMPARE_SIZE;
+                const CacheEntry* next = &Garbage[nextLocation];
 
-            //XOR location data into second cache
-            for(int i = 0; i < (GARBAGE_SLICE_SIZE >> 4); ++i) {
-                Cache.dqwords[i] = _mm_xor_si128(Cache.dqwords[i], next->dqwords[i]);
+                //XOR location data into second cache
+                for(int i = 0; i < (GARBAGE_SLICE_SIZE >> 4); ++i) {
+                    Cache[n].dqwords[i] = _mm_xor_si128(Cache[n].dqwords[i], next->dqwords[i]);
+                }
+
+                // Key is last 32b of Cache
+                // IV is last 16b of Cache
+                ExpandAESKey256(ExpKey[n], Cache[n].dqwords + (GARBAGE_SLICE_SIZE / sizeof(__m128i)) - 2);
+
+                ivs[n] = Cache[n].dqwords[(GARBAGE_SLICE_SIZE / sizeof(__m128i)) - 1];
             }
             
-            // Key is last 32b of Cache
-            // IV is last 16b of Cache
-            ExpandAESKey256(ExpKey,Cache.dqwords + (GARBAGE_SLICE_SIZE / sizeof(__m128i)) - 2);
 
-            __m128i* ciphertexts = Cache.dqwords;
-            const __m128i* plaintexts = Cache.dqwords;
-            const __m128i* expandedkeys = ExpKey;
-            __m128i iv = Cache.dqwords[(GARBAGE_SLICE_SIZE / sizeof(__m128i)) - 1];
-
-            AES256CBC(&ciphertexts, &plaintexts, &expandedkeys, &iv, 256);
+            AES256CBC(ciphertexts, plaintexts, ExpKey, ivs, 256);
         }
 
         // use last X bits as solution
-        if((Cache.dwords[(GARBAGE_SLICE_SIZE >> 2) - 1] & (COMPARE_SIZE - 1)) < 1000)
+        for(int n=0; n<AES_PARALLEL_N; ++n)
+        if((Cache[n].dwords[(GARBAGE_SLICE_SIZE >> 2) - 1] & (COMPARE_SIZE - 1)) < 1000)
         {
             uint32_t BlockHdr[22], FinalPoW[8];
 
@@ -78,7 +90,7 @@ int scanhash_hodl(int threadNumber, int totalThreads, uint32_t *pdata, const Cac
             BlockHdr[18] = swab32(pdata[18]);
             BlockHdr[19] = swab32(pdata[19]);
             BlockHdr[20] = k;
-            BlockHdr[21] = Cache.dwords[(GARBAGE_SLICE_SIZE >> 2) - 2];
+            BlockHdr[21] = Cache[n].dwords[(GARBAGE_SLICE_SIZE >> 2) - 2];
 
             sha256d((uint8_t *)FinalPoW, (uint8_t *)BlockHdr, 88);
             CollisionCount++;
