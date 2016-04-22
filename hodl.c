@@ -28,6 +28,7 @@ void Rev256(uint32_t *Dest, const uint32_t *Src)
 
 int scanhash_hodl(int threadNumber, int totalThreads, uint32_t *pdata, const CacheEntry *Garbage, const uint32_t *ptarget, unsigned long *hashes_done)
 {
+    printf("starting scanhash_hodl %d\n", threadNumber);
     uint32_t CollisionCount = 0;
     CacheEntry Cache[AES_PARALLEL_N];
 
@@ -72,7 +73,7 @@ int scanhash_hodl(int threadNumber, int totalThreads, uint32_t *pdata, const Cac
             }
             
 
-            AES256CBC(ciphertexts, plaintexts, ExpKey, ivs, BLOCK_COUNT);
+            AES256CBC(ciphertexts, plaintexts, ExpKey, ivs);
         }
 
         // use last X bits as solution

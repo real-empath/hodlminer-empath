@@ -80,6 +80,14 @@ void ExpandAESKey256(__m128i *keys, const __m128i *KeyBuf)
     keys[14] = tmp1;
 }
 
+#define AESENC(i,j) \
+    State[j] = _mm_aesenc_si128(State[j], ExpandedKey[j][i]);
+
+#define AESENC_N(i) \
+    AESENC(i,0) \
+    AESENC(i,1) \
+    AESENC(i,2) \
+    AESENC(i,3) \
 
 static inline void AES256Core(__m128i* State, const __m128i ExpandedKey[][16])
 {
@@ -88,9 +96,23 @@ static inline void AES256Core(__m128i* State, const __m128i ExpandedKey[][16])
     for(int j=0; j<N; ++j)
         State[j] = _mm_xor_si128(State[j], ExpandedKey[j][0]);
 
-    for(int i = 1; i < 14; ++i)
-        for(int j=0; j<N; ++j)
-            State[j] = _mm_aesenc_si128(State[j], ExpandedKey[j][i]);
+//    for(int i = 1; i < 14; ++i)
+//        for(int j=0; j<N; ++j)
+//            State[j] = _mm_aesenc_si128(State[j], ExpandedKey[j][i]);
+
+    AESENC_N(1)
+    AESENC_N(2)
+    AESENC_N(3)
+    AESENC_N(4)
+    AESENC_N(5)
+    AESENC_N(6)
+    AESENC_N(7)
+    AESENC_N(8)
+    AESENC_N(9)
+    AESENC_N(10)
+    AESENC_N(11)
+    AESENC_N(12)
+    AESENC_N(13)
 
     for(int j=0; j<N; ++j)
         State[j] = _mm_aesenclast_si128(State[j], ExpandedKey[j][14]);
