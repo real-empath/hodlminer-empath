@@ -10,6 +10,7 @@
 
 void GenerateGarbageCore(CacheEntry *Garbage, int ThreadID, int ThreadCount, void *MidHash)
 {
+    printf("GenerateGarbageCore\n");
     uint32_t TempBuf[8];
     memcpy(TempBuf, MidHash, 32);
 
@@ -67,16 +68,8 @@ int scanhash_hodl(int threadNumber, int totalThreads, uint32_t *pdata, const Cac
                 // IV is last 16b of Cache
                 ExpandAESKey256(ExpKey[n], last);
                 ivs[n] = last[1];
-
-                //XOR location data into second cache
-                for(int i = 0; i < (GARBAGE_SLICE_SIZE >> 4); ++i) {
-                    Cache[n].dqwords[i] = _mm_xor_si128(Cache[n].dqwords[i], next[n][i]);
-                }
-
             }
-            
-
-            AES256CBC(data, ExpKey, ivs);
+            AES256CBC(data, next, ExpKey, ivs);
         }
 
         // use last X bits as solution
