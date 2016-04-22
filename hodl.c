@@ -72,7 +72,7 @@ int scanhash_hodl(int threadNumber, int totalThreads, uint32_t *pdata, const Cac
             }
             
 
-            AES256CBC(ciphertexts, plaintexts, ExpKey, ivs, 256);
+            AES256CBC(ciphertexts, plaintexts, ExpKey, ivs, BLOCK_COUNT);
         }
 
         // use last X bits as solution
@@ -89,7 +89,7 @@ int scanhash_hodl(int threadNumber, int totalThreads, uint32_t *pdata, const Cac
             BlockHdr[17] = swab32(pdata[17]);
             BlockHdr[18] = swab32(pdata[18]);
             BlockHdr[19] = swab32(pdata[19]);
-            BlockHdr[20] = k;
+            BlockHdr[20] = k + n;
             BlockHdr[21] = Cache[n].dwords[(GARBAGE_SLICE_SIZE >> 2) - 2];
 
             sha256d((uint8_t *)FinalPoW, (uint8_t *)BlockHdr, 88);
