@@ -25,7 +25,7 @@ void Rev256(uint32_t *Dest, const uint32_t *Src)
     for(int i = 0; i < 8; ++i) Dest[i] = swab32(Src[i]);
 }
 
-int scanhash_hodl(int threadNumber, int totalThreads, uint32_t *pdata, CacheEntry *Garbage, const uint32_t *ptarget, unsigned long *hashes_done)
+int scanhash_hodl(int threadNumber, int totalThreads, uint32_t *pdata, const CacheEntry *Garbage, const uint32_t *ptarget, unsigned long *hashes_done)
 {
     uint32_t CollisionCount = 0;
     CacheEntry Cache;
@@ -41,27 +41,25 @@ int scanhash_hodl(int threadNumber, int totalThreads, uint32_t *pdata, CacheEntr
 
         for(int j = 0; j < AES_ITERATIONS; j++)
         {
-            CacheEntry TmpXOR;
             __m128i ExpKey[16];
 
             // use last 4 bytes of first cache as next location
             uint32_t nextLocation = Cache.dwords[(GARBAGE_SLICE_SIZE >> 2) - 1] & (COMPARE_SIZE - 1); //% COMPARE_SIZE;
-
-            // Copy data from indicated location to second l2 cache -
-            memcpy(&TmpXOR, Garbage + nextLocation, GARBAGE_SLICE_SIZE);
+            const CacheEntry* next = &Garbage[nextLocation];
 
             //XOR location data into second cache
-            for(int i = 0; i < (GARBAGE_SLICE_SIZE >> 4); ++i) TmpXOR.dqwords[i] = _mm_xor_si128(Cache.dqwords[i], TmpXOR.dqwords[i]);
-
-            // Key is last 32b of TmpXOR
-            // IV is last 16b of TmpXOR
-
-            ExpandAESKey256(ExpKey, TmpXOR.dqwords + (GARBAGE_SLICE_SIZE / sizeof(__m128i)) - 2);
+            for(int i = 0; i < (GARBAGE_SLICE_SIZE >> 4); ++i) {
+                Cache.dqwords[i] = _mm_xor_si128(Cache.dqwords[i], next->dqwords[i]);
+            }
+            
+            // Key is last 32b of Cache
+            // IV is last 16b of Cache
+            ExpandAESKey256(ExpKey,Cache.dqwords + (GARBAGE_SLICE_SIZE / sizeof(__m128i)) - 2);
 
             __m128i* ciphertexts = Cache.dqwords;
-            const __m128i* plaintexts = TmpXOR.dqwords;
+            const __m128i* plaintexts = Cache.dqwords;
             const __m128i* expandedkeys = ExpKey;
-            __m128i iv = TmpXOR.dqwords[(GARBAGE_SLICE_SIZE / sizeof(__m128i)) - 1];
+            __m128i iv = Cache.dqwords[(GARBAGE_SLICE_SIZE / sizeof(__m128i)) - 1];
 
             AES256CBC(&ciphertexts, &plaintexts, &expandedkeys, &iv, 256);
         }

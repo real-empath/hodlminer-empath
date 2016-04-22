@@ -18,7 +18,7 @@ typedef union _CacheEntry
 	__m128i dqwords[GARBAGE_SLICE_SIZE >> 4] __attribute__((aligned(16)));
 } CacheEntry;
 
-int scanhash_hodl(int thr_id, int totalThreads, uint32_t *pdata, CacheEntry *scratchpad, const uint32_t *ptarget, unsigned long *hashes_done);
+int scanhash_hodl(int thr_id, int totalThreads, uint32_t *pdata, const CacheEntry *scratchpad, const uint32_t *ptarget, unsigned long *hashes_done);
 void GenRandomGarbage(CacheEntry *Garbage, int totalThreads, uint32_t *pdata, int thr_id);
 
 #endif		// __HODL_H
