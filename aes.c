@@ -88,6 +88,11 @@ void ExpandAESKey256(__m128i *keys, const __m128i *KeyBuf)
     AESENC(i,1) \
     AESENC(i,2) \
     AESENC(i,3) \
+    AESENC(i,4) \
+    AESENC(i,5) \
+    AESENC(i,6) \
+    AESENC(i,7) \
+
 
 static inline void AES256Core(__m128i* State, const __m128i ExpandedKey[][16])
 {

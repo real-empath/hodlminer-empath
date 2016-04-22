@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <x86intrin.h>
 
-#define AES_PARALLEL_N 4
+#define AES_PARALLEL_N 8
 #define BLOCK_COUNT 256
 
 void ExpandAESKey256(__m128i *keys, const __m128i *KeyBuf);
