@@ -32,12 +32,10 @@ int scanhash_hodl(int threadNumber, int totalThreads, uint32_t *pdata, const Cac
     uint32_t CollisionCount = 0;
     CacheEntry Cache[AES_PARALLEL_N];
 
-    __m128i* ciphertexts[AES_PARALLEL_N];
-    const __m128i* plaintexts[AES_PARALLEL_N];
+    __m128i* data[AES_PARALLEL_N];
 
     for(int n=0; n<AES_PARALLEL_N; ++n) {
-        ciphertexts[n] = Cache[n].dqwords;
-        plaintexts[n] = Cache[n].dqwords;
+        data[n] = Cache[n].dqwords;
     }
 
     // Search for pattern in psuedorandom data
@@ -73,7 +71,7 @@ int scanhash_hodl(int threadNumber, int totalThreads, uint32_t *pdata, const Cac
             }
             
 
-            AES256CBC(ciphertexts, plaintexts, ExpKey, ivs);
+            AES256CBC(data, ExpKey, ivs);
         }
 
         // use last X bits as solution
