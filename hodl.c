@@ -33,6 +33,7 @@ int scanhash_hodl(int threadNumber, int totalThreads, uint32_t *pdata, const Cac
     CacheEntry Cache[AES_PARALLEL_N];
 
     __m128i* data[AES_PARALLEL_N];
+    const __m128i* next[AES_PARALLEL_N];
 
     for(int n=0; n<AES_PARALLEL_N; ++n) {
         data[n] = Cache[n].dqwords;
@@ -56,18 +57,22 @@ int scanhash_hodl(int threadNumber, int totalThreads, uint32_t *pdata, const Cac
             // use last 4 bytes of first cache as next location
             for(int n=0; n<AES_PARALLEL_N; ++n) {
                 uint32_t nextLocation = Cache[n].dwords[(GARBAGE_SLICE_SIZE >> 2) - 1] & (COMPARE_SIZE - 1); //% COMPARE_SIZE;
-                const CacheEntry* next = &Garbage[nextLocation];
+                next[n] = Garbage[nextLocation].dqwords;
 
-                //XOR location data into second cache
-                for(int i = 0; i < (GARBAGE_SLICE_SIZE >> 4); ++i) {
-                    Cache[n].dqwords[i] = _mm_xor_si128(Cache[n].dqwords[i], next->dqwords[i]);
-                }
+                __m128i last[2];
+                last[0] = _mm_xor_si128(Cache[n].dqwords[254], next[n][254]);
+                last[1] = _mm_xor_si128(Cache[n].dqwords[255], next[n][255]);
 
                 // Key is last 32b of Cache
                 // IV is last 16b of Cache
-                ExpandAESKey256(ExpKey[n], Cache[n].dqwords + (GARBAGE_SLICE_SIZE / sizeof(__m128i)) - 2);
+                ExpandAESKey256(ExpKey[n], last);
+                ivs[n] = last[1];
 
-                ivs[n] = Cache[n].dqwords[(GARBAGE_SLICE_SIZE / sizeof(__m128i)) - 1];
+                //XOR location data into second cache
+                for(int i = 0; i < (GARBAGE_SLICE_SIZE >> 4); ++i) {
+                    Cache[n].dqwords[i] = _mm_xor_si128(Cache[n].dqwords[i], next[n][i]);
+                }
+
             }
             
 
