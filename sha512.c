@@ -80,7 +80,7 @@ static const uint64_t k[80] =
 };
 
 
-int sha512Compute32b(const void *data, uint8_t *digest) {
+int sha512Compute32b_parallel(const uint64_t *data[SHA512_PARALLEL_N], uint64_t *digest[SHA512_PARALLEL_N]) {
     Sha512Context context;
     context.h[0] = _mm_set1_epi64x(0x6A09E667F3BCC908);
     context.h[1] = _mm_set1_epi64x(0xBB67AE8584CAA73B);
@@ -92,7 +92,7 @@ int sha512Compute32b(const void *data, uint8_t *digest) {
     context.h[7] = _mm_set1_epi64x(0x5BE0CD19137E2179);
 
     for(int i=0; i<4; ++i) {
-        context.w[i] = _mm_set1_epi64x( ((uint64_t*)data)[i] );
+        context.w[i] = _mm_set_epi64x ( data[1][i], data[0][i] );
     }
     for(int i=0; i<10; ++i) {
         context.w[i+4] = _mm_set1_epi64x( ((uint64_t*)padding)[i] );
@@ -114,7 +114,8 @@ int sha512Compute32b(const void *data, uint8_t *digest) {
 
     //Copy the resulting digest
     for(int i=0; i<8; ++i) {
-        ((uint64_t*)digest)[i] = _mm_extract_epi64(context.h[i], 0);
+        digest[0][i] = _mm_extract_epi64(context.h[i], 0);
+        digest[1][i] = _mm_extract_epi64(context.h[i], 1);
     }
 
     return 0;

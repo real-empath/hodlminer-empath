@@ -15,8 +15,13 @@ typedef struct
    __m128i w[80];
 } Sha512Context;
 
+#define SHA512_PARALLEL_N 2
+
 //SHA-512 related functions
-int sha512Compute32b(const void *data, uint8_t *digest);
+//int sha512Compute32b(const void *data, uint8_t *digest);
+
+int sha512Compute32b_parallel(const uint64_t *data[SHA512_PARALLEL_N],
+        uint64_t *digest[SHA512_PARALLEL_N]);
 
 void sha512ProcessBlock(Sha512Context *context);
 

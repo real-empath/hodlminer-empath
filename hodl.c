@@ -12,15 +12,26 @@
 void GenerateGarbageCore(CacheEntry *Garbage, int ThreadID, int ThreadCount, void *MidHash)
 {
     printf("GenerateGarbageCore\n");
-    uint32_t TempBuf[8];
-    memcpy(TempBuf, MidHash, 32);
+    uint64_t* TempBufs[SHA512_PARALLEL_N];
+    uint64_t* desination[SHA512_PARALLEL_N];
+
+    for (int i=0; i<SHA512_PARALLEL_N; ++i) {
+        TempBufs[i] = (uint64_t*)malloc(32);
+        memcpy(TempBufs[i], MidHash, 32);
+    }
 
     uint32_t StartChunk = ThreadID * (TOTAL_CHUNKS / ThreadCount);
-    for(uint32_t i = StartChunk; i < StartChunk + (TOTAL_CHUNKS / ThreadCount); ++i)
+    for(uint32_t i = StartChunk; i < StartChunk + (TOTAL_CHUNKS / ThreadCount); i+=2)
     {
-        TempBuf[0] = i;
-        //SHA512((uint8_t *)TempBuf, 32, ((uint8_t *)Garbage) + (i * GARBAGE_CHUNK_SIZE));
-        int err = sha512Compute32b(TempBuf, ((uint8_t *)Garbage) + (i * GARBAGE_CHUNK_SIZE));
+        ((uint32_t*)TempBufs[0])[0] = i;
+        ((uint32_t*)TempBufs[1])[0] = i + 1;
+        desination[0] = (uint64_t*)((uint8_t *)Garbage + (i * GARBAGE_CHUNK_SIZE));
+        desination[1] = (uint64_t*)((uint8_t *)Garbage + ((i+1) * GARBAGE_CHUNK_SIZE));
+        int err = sha512Compute32b_parallel(TempBufs, desination);
+    }
+
+    for (int i=0; i<SHA512_PARALLEL_N; ++i) {
+        free(TempBufs[i]);
     }
 }
 
