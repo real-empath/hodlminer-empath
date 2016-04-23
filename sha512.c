@@ -93,143 +93,33 @@ int sha512Compute32b(const void *data, uint8_t *digest) {
     context.h[7] = 0x5BE0CD19137E2179;
 
     memcpy(context.buffer, data, 32);
+    memcpy(context.buffer + 32, padding, 80);
+
     context.size = 32;
     context.totalSize = 32;
 
-    sha512Final(&context, digest);
+    //Length of the original message (before padding)
+    uint64_t totalSize = 32 * 8;
+
+    //Append padding
+    //sha512Update(context, padding, paddingSize);
+
+    //Append the length of the original message
+    context.w[14] = 0;
+    context.w[15] = htobe64(totalSize);
+
+    //Calculate the message digest
+    sha512ProcessBlock(&context);
+
+    //Convert from host byte order to big-endian byte order
+    for (int i = 0; i < 8; i++)
+        context.h[i] = htobe64(context.h[i]);
+
+    //Copy the resulting digest
+    if (digest != NULL)
+        memcpy(digest, context.digest, SHA512_DIGEST_SIZE);
 
     return 0;
-}
-
-/**
- * @brief Digest a message using SHA-512
- * @param[in] data Pointer to the message being hashed
- * @param[in] length Length of the message
- * @param[out] digest Pointer to the calculated digest
- * @return Error code
- **/
-
-int sha512Compute(const void *data, size_t length, uint8_t *digest)
-{
-   //Allocate a memory buffer to hold the SHA-512 context
-   Sha512Context *context = (Sha512Context*) malloc(sizeof(Sha512Context));
-   //Failed to allocate memory?
-   if(!context) return 1;
-
-   //Initialize the SHA-512 context
-   sha512Init(context);
-   //Digest the message
-   sha512Update(context, data, length);
-   //Finalize the SHA-512 message digest
-   sha512Final(context, digest);
-
-   //Free previously allocated memory
-   free(context);
-   //Successful processing
-   return 0;
-}
-
-
-/**
- * @brief Initialize SHA-512 message digest context
- * @param[in] context Pointer to the SHA-512 context to initialize
- **/
-
-void sha512Init(Sha512Context *context)
-{
-   //Set initial hash value
-   context->h[0] = 0x6A09E667F3BCC908;
-   context->h[1] = 0xBB67AE8584CAA73B;
-   context->h[2] = 0x3C6EF372FE94F82B;
-   context->h[3] = 0xA54FF53A5F1D36F1;
-   context->h[4] = 0x510E527FADE682D1;
-   context->h[5] = 0x9B05688C2B3E6C1F;
-   context->h[6] = 0x1F83D9ABFB41BD6B;
-   context->h[7] = 0x5BE0CD19137E2179;
-
-   //Number of bytes in the buffer
-   context->size = 0;
-   //Total length of the message
-   context->totalSize = 0;
-}
-
-
-size_t MIN(size_t a, size_t b) {
-    return a < b ? a : b;
-}
-
-/**
- * @brief Update the SHA-512 context with a portion of the message being hashed
- * @param[in] context Pointer to the SHA-512 context
- * @param[in] data Pointer to the buffer being hashed
- * @param[in] length Length of the buffer
- **/
-
-void sha512Update(Sha512Context *context, const void *data, size_t length)
-{
-   //Process the incoming data
-   while(length > 0)
-   {
-      //The buffer can hold at most 128 bytes
-      size_t n = MIN(length, 128 - context->size);
-
-      //Copy the data to the buffer
-      memcpy(context->buffer + context->size, data, n);
-
-      //Update the SHA-512 context
-      context->size += n;
-      context->totalSize += n;
-      //Advance the data pointer
-      data = (uint8_t *) data + n;
-      //Remaining bytes to process
-      length -= n;
-
-      //Process message in 16-word blocks
-      if(context->size == 128)
-      {
-         //Transform the 16-word block
-         sha512ProcessBlock(context);
-         //Empty the buffer
-         context->size = 0;
-      }
-   }
-}
-
-
-/**
- * @brief Finish the SHA-512 message digest
- * @param[in] context Pointer to the SHA-512 context
- * @param[out] digest Calculated digest (optional parameter)
- **/
-
-void sha512Final(Sha512Context *context, uint8_t *digest)
-{
-   uint32_t i;
-   size_t paddingSize;
-   uint64_t totalSize;
-
-   //Length of the original message (before padding)
-   totalSize = context->totalSize * 8;
-
-   //Pad the message so that its length is congruent to 112 modulo 128
-   paddingSize = (context->size < 112) ? (112 - context->size) : (128 + 112 - context->size);
-   //Append padding
-   sha512Update(context, padding, paddingSize);
-
-   //Append the length of the original message
-   context->w[14] = 0;
-   context->w[15] = htobe64(totalSize);
-
-   //Calculate the message digest
-   sha512ProcessBlock(context);
-
-   //Convert from host byte order to big-endian byte order
-   for(i = 0; i < 8; i++)
-      context->h[i] = htobe64(context->h[i]);
-
-   //Copy the resulting digest
-   if(digest != NULL)
-      memcpy(digest, context->digest, SHA512_DIGEST_SIZE);
 }
 
 /**
