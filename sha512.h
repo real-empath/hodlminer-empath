@@ -2,6 +2,7 @@
 #define _SHA512_H
 
 #include <stdint.h>
+#include "emmintrin.h"
 
 //SHA-512 block size
 #define SHA512_BLOCK_SIZE 128
@@ -10,18 +11,8 @@
 
 typedef struct
 {
-   union
-   {
-      uint64_t h[8];
-      uint8_t digest[64];
-   };
-   union
-   {
-      uint64_t w[80];
-      uint8_t buffer[128];
-   };
-   size_t size;
-   uint64_t totalSize;
+   __m128i h[8];
+   __m128i w[80];
 } Sha512Context;
 
 //SHA-512 related functions

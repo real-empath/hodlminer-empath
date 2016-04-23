@@ -5,6 +5,8 @@
 //Dependencies
 #include <string.h>
 #include <stdlib.h>
+#include "tmmintrin.h"
+#include "smmintrin.h"
 
 #include "sha512.h"
 
@@ -16,31 +18,28 @@
 #define MAJ(x, y, z) (((x) & (y)) | ((x) & (z)) | ((y) & (z)))
 #define SIGMA1(x) (ROR64(x, 28) ^ ROR64(x, 34) ^ ROR64(x, 39))
 #define SIGMA2(x) (ROR64(x, 14) ^ ROR64(x, 18) ^ ROR64(x, 41))
-#define SIGMA3(x) (ROR64(x, 1) ^ ROR64(x, 8) ^ SHR64(x, 7))
+#define SIGMA3(x) (ROR64(x, 1)  ^ ROR64(x, 8)  ^ SHR64(x, 7))
 #define SIGMA4(x) (ROR64(x, 19) ^ ROR64(x, 61) ^ SHR64(x, 6))
 
-//Rotate left operation
-#define ROL32(a, n) (((a) << (n)) | ((a) >> (32 - (n))))
-#define ROL64(a, n) (((a) << (n)) | ((a) >> (64 - (n))))
 //Rotate right operation
-#define ROR32(a, n) (((a) >> (n)) | ((a) << (32 - (n))))
-#define ROR64(a, n) (((a) >> (n)) | ((a) << (64 - (n))))
+#define ROR64(a, n) _mm_or_si128(_mm_srli_epi64(a, n), _mm_slli_epi64(a, sizeof(ulong)*8 - n))
 
-//Shift left operation
-#define SHL32(a, n) ((a) << (n))
-#define SHL64(a, n) ((a) << (n))
 //Shift right operation
-#define SHR32(a, n) ((a) >> (n))
-#define SHR64(a, n) ((a) >> (n))
-
+#define SHR64(a, n) _mm_srli_epi64(a, n)
 
 uint64_t betoh64(uint64_t a) {
     return be64toh(a);
     //return __builtin_bswap64(a);
 }
-//uint64_t htobe64(uint64_t a) {
-//    return __builtin_bswap64(a);
-//}
+
+__m128i mm_htobe_epi64(__m128i a) {
+  __m128i mask = _mm_set_epi8(8, 9, 10, 11, 12, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6, 7);
+  return _mm_shuffle_epi8(a, mask);
+}
+
+__m128i mm_betoh_epi64(__m128i a) {
+    return mm_htobe_epi64(a);
+}
 
 //SHA-512 padding
 static const uint8_t padding[128] =
@@ -83,41 +82,42 @@ static const uint64_t k[80] =
 
 int sha512Compute32b(const void *data, uint8_t *digest) {
     Sha512Context context;
-    context.h[0] = 0x6A09E667F3BCC908;
-    context.h[1] = 0xBB67AE8584CAA73B;
-    context.h[2] = 0x3C6EF372FE94F82B;
-    context.h[3] = 0xA54FF53A5F1D36F1;
-    context.h[4] = 0x510E527FADE682D1;
-    context.h[5] = 0x9B05688C2B3E6C1F;
-    context.h[6] = 0x1F83D9ABFB41BD6B;
-    context.h[7] = 0x5BE0CD19137E2179;
+    context.h[0] = _mm_set1_epi64x(0x6A09E667F3BCC908);
+    context.h[1] = _mm_set1_epi64x(0xBB67AE8584CAA73B);
+    context.h[2] = _mm_set1_epi64x(0x3C6EF372FE94F82B);
+    context.h[3] = _mm_set1_epi64x(0xA54FF53A5F1D36F1);
+    context.h[4] = _mm_set1_epi64x(0x510E527FADE682D1);
+    context.h[5] = _mm_set1_epi64x(0x9B05688C2B3E6C1F);
+    context.h[6] = _mm_set1_epi64x(0x1F83D9ABFB41BD6B);
+    context.h[7] = _mm_set1_epi64x(0x5BE0CD19137E2179);
 
-    memcpy(context.buffer, data, 32);
-    memcpy(context.buffer + 32, padding, 80);
-
-    context.size = 32;
-    context.totalSize = 32;
+    for(int i=0; i<4; ++i) {
+        context.w[i] = _mm_set1_epi64x( ((uint64_t*)data)[i] );
+    }
+    for(int i=0; i<10; ++i) {
+        context.w[i+4] = _mm_set1_epi64x( ((uint64_t*)padding)[i] );
+    }
+//    memcpy(context.buffer, data, 32);
+//    memcpy(context.buffer + 32, padding, 80);
 
     //Length of the original message (before padding)
     uint64_t totalSize = 32 * 8;
 
-    //Append padding
-    //sha512Update(context, padding, paddingSize);
-
     //Append the length of the original message
-    context.w[14] = 0;
-    context.w[15] = htobe64(totalSize);
+    context.w[14] = _mm_set1_epi64x(0);
+    context.w[15] = _mm_set1_epi64x(htobe64(totalSize));
 
     //Calculate the message digest
     sha512ProcessBlock(&context);
 
     //Convert from host byte order to big-endian byte order
     for (int i = 0; i < 8; i++)
-        context.h[i] = htobe64(context.h[i]);
+        context.h[i] = mm_htobe_epi64(context.h[i]);
 
     //Copy the resulting digest
-    if (digest != NULL)
-        memcpy(digest, context.digest, SHA512_DIGEST_SIZE);
+    for(int i=0; i<8; ++i) {
+        ((uint64_t*)digest)[i] = _mm_extract_epi64(context.h[i], 0);
+    }
 
     return 0;
 }
@@ -130,29 +130,31 @@ int sha512Compute32b(const void *data, uint8_t *digest) {
 void sha512ProcessBlock(Sha512Context *context)
 {
    uint32_t t;
-   uint64_t temp1;
-   uint64_t temp2;
+   __m128i temp1;
+   __m128i temp2;
 
    //Initialize the 8 working registers
-   uint64_t a = context->h[0];
-   uint64_t b = context->h[1];
-   uint64_t c = context->h[2];
-   uint64_t d = context->h[3];
-   uint64_t e = context->h[4];
-   uint64_t f = context->h[5];
-   uint64_t g = context->h[6];
-   uint64_t h = context->h[7];
+   __m128i a = context->h[0];
+   __m128i b = context->h[1];
+   __m128i c = context->h[2];
+   __m128i d = context->h[3];
+   __m128i e = context->h[4];
+   __m128i f = context->h[5];
+   __m128i g = context->h[6];
+   __m128i h = context->h[7];
 
    //Process message in 16-word blocks
-   uint64_t *w = context->w;
+   __m128i *w = context->w;
 
    //Convert from big-endian byte order to host byte order
-   for(t = 0; t < 16; t++)
-      w[t] = betoh64(w[t]);
+   for(t = 0; t < 16; t++) {
+      w[t] = mm_betoh_epi64(w[t]);
+   }
 
    //Prepare the message schedule
-   for(t = 16; t < 80; t++)
+   for(t = 16; t < 80; t++) {
       w[t] = SIGMA4(w[t - 2]) + w[t - 7] + SIGMA3(w[t - 15]) + w[t - 16];
+   }
 
    //SHA-512 hash computation
    for(t = 0; t < 80; t++)
