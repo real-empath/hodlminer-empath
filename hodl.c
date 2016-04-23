@@ -20,7 +20,7 @@ void GenerateGarbageCore(CacheEntry *Garbage, int ThreadID, int ThreadCount, voi
     {
         TempBuf[0] = i;
         //SHA512((uint8_t *)TempBuf, 32, ((uint8_t *)Garbage) + (i * GARBAGE_CHUNK_SIZE));
-        int err = sha512Compute(TempBuf, 32, ((uint8_t *)Garbage) + (i * GARBAGE_CHUNK_SIZE));
+        int err = sha512Compute32b(TempBuf, ((uint8_t *)Garbage) + (i * GARBAGE_CHUNK_SIZE));
     }
 }
 

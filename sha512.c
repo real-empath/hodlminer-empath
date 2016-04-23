@@ -81,6 +81,26 @@ static const uint64_t k[80] =
 };
 
 
+int sha512Compute32b(const void *data, uint8_t *digest) {
+    Sha512Context context;
+    context.h[0] = 0x6A09E667F3BCC908;
+    context.h[1] = 0xBB67AE8584CAA73B;
+    context.h[2] = 0x3C6EF372FE94F82B;
+    context.h[3] = 0xA54FF53A5F1D36F1;
+    context.h[4] = 0x510E527FADE682D1;
+    context.h[5] = 0x9B05688C2B3E6C1F;
+    context.h[6] = 0x1F83D9ABFB41BD6B;
+    context.h[7] = 0x5BE0CD19137E2179;
+
+    memcpy(context.buffer, data, 32);
+    context.size = 32;
+    context.totalSize = 32;
+
+    sha512Final(&context, digest);
+
+    return 0;
+}
+
 /**
  * @brief Digest a message using SHA-512
  * @param[in] data Pointer to the message being hashed
