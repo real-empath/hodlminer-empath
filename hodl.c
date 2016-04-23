@@ -3,6 +3,7 @@
 #include <openssl/sha.h>
 #include <x86intrin.h>
 #include <emmintrin.h>
+#include "sha512.h"
 
 #include "hodl.h"
 #include "miner.h"
@@ -18,7 +19,8 @@ void GenerateGarbageCore(CacheEntry *Garbage, int ThreadID, int ThreadCount, voi
     for(uint32_t i = StartChunk; i < StartChunk + (TOTAL_CHUNKS / ThreadCount); ++i)
     {
         TempBuf[0] = i;
-        SHA512((uint8_t *)TempBuf, 32, ((uint8_t *)Garbage) + (i * GARBAGE_CHUNK_SIZE));
+        //SHA512((uint8_t *)TempBuf, 32, ((uint8_t *)Garbage) + (i * GARBAGE_CHUNK_SIZE));
+        int err = sha512Compute(TempBuf, 32, ((uint8_t *)Garbage) + (i * GARBAGE_CHUNK_SIZE));
     }
 }
 
