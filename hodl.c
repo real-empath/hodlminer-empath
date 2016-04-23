@@ -21,12 +21,12 @@ void GenerateGarbageCore(CacheEntry *Garbage, int ThreadID, int ThreadCount, voi
     }
 
     uint32_t StartChunk = ThreadID * (TOTAL_CHUNKS / ThreadCount);
-    for(uint32_t i = StartChunk; i < StartChunk + (TOTAL_CHUNKS / ThreadCount); i+=2)
+    for(uint32_t i = StartChunk; i < StartChunk + (TOTAL_CHUNKS / ThreadCount); i+= SHA512_PARALLEL_N)
     {
-        ((uint32_t*)TempBufs[0])[0] = i;
-        ((uint32_t*)TempBufs[1])[0] = i + 1;
-        desination[0] = (uint64_t*)((uint8_t *)Garbage + (i * GARBAGE_CHUNK_SIZE));
-        desination[1] = (uint64_t*)((uint8_t *)Garbage + ((i+1) * GARBAGE_CHUNK_SIZE));
+        for(int j=0; j<SHA512_PARALLEL_N; ++j) {
+            ((uint32_t*)TempBufs[j])[0] = i + j;
+            desination[j] = (uint64_t*)((uint8_t *)Garbage + ((i+j) * GARBAGE_CHUNK_SIZE));
+        }
         int err = sha512Compute32b_parallel(TempBufs, desination);
     }
 

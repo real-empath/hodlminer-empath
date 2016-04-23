@@ -81,62 +81,85 @@ static const uint64_t k[80] =
 
 
 int sha512Compute32b_parallel(const uint64_t *data[SHA512_PARALLEL_N], uint64_t *digest[SHA512_PARALLEL_N]) {
-    Sha512Context context;
-    context.h[0] = _mm_set1_epi64x(0x6A09E667F3BCC908);
-    context.h[1] = _mm_set1_epi64x(0xBB67AE8584CAA73B);
-    context.h[2] = _mm_set1_epi64x(0x3C6EF372FE94F82B);
-    context.h[3] = _mm_set1_epi64x(0xA54FF53A5F1D36F1);
-    context.h[4] = _mm_set1_epi64x(0x510E527FADE682D1);
-    context.h[5] = _mm_set1_epi64x(0x9B05688C2B3E6C1F);
-    context.h[6] = _mm_set1_epi64x(0x1F83D9ABFB41BD6B);
-    context.h[7] = _mm_set1_epi64x(0x5BE0CD19137E2179);
+    Sha512Context context[2];
+    context[0].h[0] = _mm_set1_epi64x(0x6A09E667F3BCC908);
+    context[0].h[1] = _mm_set1_epi64x(0xBB67AE8584CAA73B);
+    context[0].h[2] = _mm_set1_epi64x(0x3C6EF372FE94F82B);
+    context[0].h[3] = _mm_set1_epi64x(0xA54FF53A5F1D36F1);
+    context[0].h[4] = _mm_set1_epi64x(0x510E527FADE682D1);
+    context[0].h[5] = _mm_set1_epi64x(0x9B05688C2B3E6C1F);
+    context[0].h[6] = _mm_set1_epi64x(0x1F83D9ABFB41BD6B);
+    context[0].h[7] = _mm_set1_epi64x(0x5BE0CD19137E2179);
+
+    context[1].h[0] = _mm_set1_epi64x(0x6A09E667F3BCC908);
+    context[1].h[1] = _mm_set1_epi64x(0xBB67AE8584CAA73B);
+    context[1].h[2] = _mm_set1_epi64x(0x3C6EF372FE94F82B);
+    context[1].h[3] = _mm_set1_epi64x(0xA54FF53A5F1D36F1);
+    context[1].h[4] = _mm_set1_epi64x(0x510E527FADE682D1);
+    context[1].h[5] = _mm_set1_epi64x(0x9B05688C2B3E6C1F);
+    context[1].h[6] = _mm_set1_epi64x(0x1F83D9ABFB41BD6B);
+    context[1].h[7] = _mm_set1_epi64x(0x5BE0CD19137E2179);
 
     for(int i=0; i<4; ++i) {
-        context.w[i] = _mm_set_epi64x ( data[1][i], data[0][i] );
+        context[0].w[i] = _mm_set_epi64x ( data[1][i], data[0][i] );
+        context[1].w[i] = _mm_set_epi64x ( data[3][i], data[2][i] );
     }
     for(int i=0; i<10; ++i) {
-        context.w[i+4] = _mm_set1_epi64x( ((uint64_t*)padding)[i] );
+        context[0].w[i+4] = _mm_set1_epi64x( ((uint64_t*)padding)[i] );
+        context[1].w[i+4] = _mm_set1_epi64x( ((uint64_t*)padding)[i] );
     }
 
     //Length of the original message (before padding)
     uint64_t totalSize = 32 * 8;
 
     //Append the length of the original message
-    context.w[14] = _mm_set1_epi64x(0);
-    context.w[15] = _mm_set1_epi64x(htobe64(totalSize));
+    context[0].w[14] = _mm_set1_epi64x(0);
+    context[0].w[15] = _mm_set1_epi64x(htobe64(totalSize));
+
+    context[1].w[14] = _mm_set1_epi64x(0);
+    context[1].w[15] = _mm_set1_epi64x(htobe64(totalSize));
 
     //Calculate the message digest
-    sha512ProcessBlock(&context);
+    sha512ProcessBlock(context);
 
     //Convert from host byte order to big-endian byte order
-    for (int i = 0; i < 8; i++)
-        context.h[i] = mm_htobe_epi64(context.h[i]);
+    for (int i = 0; i < 8; i++) {
+        context[0].h[i] = mm_htobe_epi64(context[0].h[i]);
+        context[1].h[i] = mm_htobe_epi64(context[1].h[i]);
+    }
 
     //Copy the resulting digest
     for(int i=0; i<8; ++i) {
-        digest[0][i] = _mm_extract_epi64(context.h[i], 0);
-        digest[1][i] = _mm_extract_epi64(context.h[i], 1);
+        digest[0][i] = _mm_extract_epi64(context[0].h[i], 0);
+        digest[1][i] = _mm_extract_epi64(context[0].h[i], 1);
+        digest[2][i] = _mm_extract_epi64(context[1].h[i], 0);
+        digest[3][i] = _mm_extract_epi64(context[1].h[i], 1);
     }
 
     return 0;
 }
 
-#define blk0(i) (block[i] = mm_betoh_epi64(block[i]))
-#define blk(i)  (block[i] = block[i - 16] + SIGMA3(block[i - 15]) + \
-                            SIGMA4(block[i - 2]) + block[i - 7])
+#define blk0(n, i) (block[n][i] = mm_betoh_epi64(block[n][i]))
+#define blk(n, i)  (block[n][i] = block[n][i - 16] + SIGMA3(block[n][i - 15]) + \
+                            SIGMA4(block[n][i - 2]) + block[n][i - 7])
 
 #define ROUND512(a,b,c,d,e,f,g,h)   \
-    T1 += (h) + SIGMA2(e) + Ch((e), (f), (g)) + k[i]; \
-    (d) += T1; \
-    (h) = T1 + SIGMA1(a) + Maj((a), (b), (c)); \
+    T0 += (h[0]) + SIGMA2(e[0]) + Ch((e[0]), (f[0]), (g[0])) + k[i]; \
+    T1 += (h[1]) + SIGMA2(e[1]) + Ch((e[1]), (f[1]), (g[1])) + k[i]; \
+    (d[0]) += T0; \
+    (d[1]) += T1; \
+    (h[0]) = T0 + SIGMA1(a[0]) + Maj((a[0]), (b[0]), (c[0])); \
+    (h[1]) = T1 + SIGMA1(a[1]) + Maj((a[1]), (b[1]), (c[1])); \
     i++
 
 #define ROUND512_0_TO_15(a,b,c,d,e,f,g,h)   \
-    T1 = blk0(i); \
+    T0 = blk0(0, i); \
+    T1 = blk0(1, i); \
     ROUND512(a,b,c,d,e,f,g,h)
 
 #define ROUND512_16_TO_80(a,b,c,d,e,f,g,h)   \
-    T1 = blk(i); \
+    T0 = blk(0, i); \
+    T1 = blk(1, i); \
     ROUND512(a,b,c,d,e,f,g,h)
 
 #define R512_0 \
@@ -159,19 +182,26 @@ int sha512Compute32b_parallel(const uint64_t *data[SHA512_PARALLEL_N], uint64_t 
     ROUND512_16_TO_80(c, d, e, f, g, h, a, b); \
     ROUND512_16_TO_80(b, c, d, e, f, g, h, a)
 
-void sha512ProcessBlock(Sha512Context *context)
-{
-    __m128i* block = context->w;
-    __m128i T1;
+#define INIT(x,n) \
+    x[0] = context[0].h[n]; \
+    x[1] = context[1].h[n]; \
 
-    __m128i a = context->h[0];
-    __m128i b = context->h[1];
-    __m128i c = context->h[2];
-    __m128i d = context->h[3];
-    __m128i e = context->h[4];
-    __m128i f = context->h[5];
-    __m128i g = context->h[6];
-    __m128i h = context->h[7];
+void sha512ProcessBlock(Sha512Context context[2])
+{
+    __m128i* block[2];
+    block[0] = context[0].w;
+    block[1] = context[1].w;
+
+    __m128i T0, T1;
+    __m128i a[2], b[2], c[2], d[2], e[2], f[2], g[2], h[2];
+    INIT(a, 0)
+    INIT(b, 1)
+    INIT(c, 2)
+    INIT(d, 3)
+    INIT(e, 4)
+    INIT(f, 5)
+    INIT(g, 6)
+    INIT(h, 7)
 
     int i = 0;
     R512_0; R512_0;
@@ -179,14 +209,23 @@ void sha512ProcessBlock(Sha512Context *context)
         R512_16;
     }
 
-    context->h[0] += a;
-    context->h[1] += b;
-    context->h[2] += c;
-    context->h[3] += d;
-    context->h[4] += e;
-    context->h[5] += f;
-    context->h[6] += g;
-    context->h[7] += h;
+    context[0].h[0] += a[0];
+    context[0].h[1] += b[0];
+    context[0].h[2] += c[0];
+    context[0].h[3] += d[0];
+    context[0].h[4] += e[0];
+    context[0].h[5] += f[0];
+    context[0].h[6] += g[0];
+    context[0].h[7] += h[0];
+
+    context[1].h[0] += a[1];
+    context[1].h[1] += b[1];
+    context[1].h[2] += c[1];
+    context[1].h[3] += d[1];
+    context[1].h[4] += e[1];
+    context[1].h[5] += f[1];
+    context[1].h[6] += g[1];
+    context[1].h[7] += h[1];
 }
 
 #endif
