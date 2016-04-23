@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include "tmmintrin.h"
 #include "smmintrin.h"
+#include "immintrin.h"
 
 #include "sha512.h"
 
@@ -22,23 +23,27 @@
 #define SIGMA4(x) (ROR64(x, 19) ^ ROR64(x, 61) ^ SHR64(x, 6))
 
 //Rotate right operation
-#define ROR64(a, n) _mm_or_si128(_mm_srli_epi64(a, n), _mm_slli_epi64(a, sizeof(ulong)*8 - n))
+#define ROR64(a, n) _mm256_or_si256(_mm256_srli_epi64(a, n), _mm256_slli_epi64(a, sizeof(ulong)*8 - n))
 
 //Shift right operation
-#define SHR64(a, n) _mm_srli_epi64(a, n)
+#define SHR64(a, n) _mm256_srli_epi64(a, n)
 
 uint64_t betoh64(uint64_t a) {
     return be64toh(a);
     //return __builtin_bswap64(a);
 }
 
-__m128i mm_htobe_epi64(__m128i a) {
-  __m128i mask = _mm_set_epi8(8, 9, 10, 11, 12, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6, 7);
-  return _mm_shuffle_epi8(a, mask);
+__m256i mm256_htobe_epi64(__m256i a) {
+  __m256i mask = _mm256_set_epi8(
+          24,25,26,27,28,29,30,31,
+          16,17,18,19,20,21,22,23,
+          8, 9, 10, 11, 12, 13, 14, 15,
+          0, 1, 2, 3, 4, 5, 6, 7);
+  return _mm256_shuffle_epi8(a, mask);
 }
 
-__m128i mm_betoh_epi64(__m128i a) {
-    return mm_htobe_epi64(a);
+__m256i mm256_betoh_epi64(__m256i a) {
+    return mm256_htobe_epi64(a);
 }
 
 //SHA-512 padding
@@ -82,64 +87,69 @@ static const uint64_t k[80] =
 
 int sha512Compute32b_parallel(const uint64_t *data[SHA512_PARALLEL_N], uint64_t *digest[SHA512_PARALLEL_N]) {
     Sha512Context context[2];
-    context[0].h[0] = _mm_set1_epi64x(0x6A09E667F3BCC908);
-    context[0].h[1] = _mm_set1_epi64x(0xBB67AE8584CAA73B);
-    context[0].h[2] = _mm_set1_epi64x(0x3C6EF372FE94F82B);
-    context[0].h[3] = _mm_set1_epi64x(0xA54FF53A5F1D36F1);
-    context[0].h[4] = _mm_set1_epi64x(0x510E527FADE682D1);
-    context[0].h[5] = _mm_set1_epi64x(0x9B05688C2B3E6C1F);
-    context[0].h[6] = _mm_set1_epi64x(0x1F83D9ABFB41BD6B);
-    context[0].h[7] = _mm_set1_epi64x(0x5BE0CD19137E2179);
+    context[0].h[0] = _mm256_set1_epi64x(0x6A09E667F3BCC908);
+    context[0].h[1] = _mm256_set1_epi64x(0xBB67AE8584CAA73B);
+    context[0].h[2] = _mm256_set1_epi64x(0x3C6EF372FE94F82B);
+    context[0].h[3] = _mm256_set1_epi64x(0xA54FF53A5F1D36F1);
+    context[0].h[4] = _mm256_set1_epi64x(0x510E527FADE682D1);
+    context[0].h[5] = _mm256_set1_epi64x(0x9B05688C2B3E6C1F);
+    context[0].h[6] = _mm256_set1_epi64x(0x1F83D9ABFB41BD6B);
+    context[0].h[7] = _mm256_set1_epi64x(0x5BE0CD19137E2179);
 
-    context[1].h[0] = _mm_set1_epi64x(0x6A09E667F3BCC908);
-    context[1].h[1] = _mm_set1_epi64x(0xBB67AE8584CAA73B);
-    context[1].h[2] = _mm_set1_epi64x(0x3C6EF372FE94F82B);
-    context[1].h[3] = _mm_set1_epi64x(0xA54FF53A5F1D36F1);
-    context[1].h[4] = _mm_set1_epi64x(0x510E527FADE682D1);
-    context[1].h[5] = _mm_set1_epi64x(0x9B05688C2B3E6C1F);
-    context[1].h[6] = _mm_set1_epi64x(0x1F83D9ABFB41BD6B);
-    context[1].h[7] = _mm_set1_epi64x(0x5BE0CD19137E2179);
+    context[1].h[0] = _mm256_set1_epi64x(0x6A09E667F3BCC908);
+    context[1].h[1] = _mm256_set1_epi64x(0xBB67AE8584CAA73B);
+    context[1].h[2] = _mm256_set1_epi64x(0x3C6EF372FE94F82B);
+    context[1].h[3] = _mm256_set1_epi64x(0xA54FF53A5F1D36F1);
+    context[1].h[4] = _mm256_set1_epi64x(0x510E527FADE682D1);
+    context[1].h[5] = _mm256_set1_epi64x(0x9B05688C2B3E6C1F);
+    context[1].h[6] = _mm256_set1_epi64x(0x1F83D9ABFB41BD6B);
+    context[1].h[7] = _mm256_set1_epi64x(0x5BE0CD19137E2179);
 
     for(int i=0; i<4; ++i) {
-        context[0].w[i] = _mm_set_epi64x ( data[1][i], data[0][i] );
-        context[1].w[i] = _mm_set_epi64x ( data[3][i], data[2][i] );
+        context[0].w[i] = _mm256_set_epi64x ( data[3][i], data[2][i], data[1][i], data[0][i] );
+        context[1].w[i] = _mm256_set_epi64x ( data[7][i], data[6][i], data[5][i], data[4][i]  );
     }
     for(int i=0; i<10; ++i) {
-        context[0].w[i+4] = _mm_set1_epi64x( ((uint64_t*)padding)[i] );
-        context[1].w[i+4] = _mm_set1_epi64x( ((uint64_t*)padding)[i] );
+        context[0].w[i+4] = _mm256_set1_epi64x( ((uint64_t*)padding)[i] );
+        context[1].w[i+4] = _mm256_set1_epi64x( ((uint64_t*)padding)[i] );
     }
 
     //Length of the original message (before padding)
     uint64_t totalSize = 32 * 8;
 
     //Append the length of the original message
-    context[0].w[14] = _mm_set1_epi64x(0);
-    context[0].w[15] = _mm_set1_epi64x(htobe64(totalSize));
+    context[0].w[14] = _mm256_set1_epi64x(0);
+    context[0].w[15] = _mm256_set1_epi64x(htobe64(totalSize));
 
-    context[1].w[14] = _mm_set1_epi64x(0);
-    context[1].w[15] = _mm_set1_epi64x(htobe64(totalSize));
+    context[1].w[14] = _mm256_set1_epi64x(0);
+    context[1].w[15] = _mm256_set1_epi64x(htobe64(totalSize));
 
     //Calculate the message digest
     sha512ProcessBlock(context);
 
     //Convert from host byte order to big-endian byte order
     for (int i = 0; i < 8; i++) {
-        context[0].h[i] = mm_htobe_epi64(context[0].h[i]);
-        context[1].h[i] = mm_htobe_epi64(context[1].h[i]);
+        context[0].h[i] = mm256_htobe_epi64(context[0].h[i]);
+        context[1].h[i] = mm256_htobe_epi64(context[1].h[i]);
     }
 
     //Copy the resulting digest
     for(int i=0; i<8; ++i) {
-        digest[0][i] = _mm_extract_epi64(context[0].h[i], 0);
-        digest[1][i] = _mm_extract_epi64(context[0].h[i], 1);
-        digest[2][i] = _mm_extract_epi64(context[1].h[i], 0);
-        digest[3][i] = _mm_extract_epi64(context[1].h[i], 1);
+        digest[0][i] = _mm256_extract_epi64(context[0].h[i], 0);
+        digest[1][i] = _mm256_extract_epi64(context[0].h[i], 1);
+        digest[2][i] = _mm256_extract_epi64(context[0].h[i], 2);
+        digest[3][i] = _mm256_extract_epi64(context[0].h[i], 3);
+
+        digest[4][i] = _mm256_extract_epi64(context[1].h[i], 0);
+        digest[5][i] = _mm256_extract_epi64(context[1].h[i], 1);
+        digest[6][i] = _mm256_extract_epi64(context[1].h[i], 2);
+        digest[7][i] = _mm256_extract_epi64(context[1].h[i], 3);
     }
 
     return 0;
 }
 
-#define blk0(n, i) (block[n][i] = mm_betoh_epi64(block[n][i]))
+#define blk0(n, i) (block[n][i] = mm256_betoh_epi64(block[n][i]))
 #define blk(n, i)  (block[n][i] = block[n][i - 16] + SIGMA3(block[n][i - 15]) + \
                             SIGMA4(block[n][i - 2]) + block[n][i - 7])
 
@@ -188,12 +198,12 @@ int sha512Compute32b_parallel(const uint64_t *data[SHA512_PARALLEL_N], uint64_t 
 
 void sha512ProcessBlock(Sha512Context context[2])
 {
-    __m128i* block[2];
+    __m256i* block[2];
     block[0] = context[0].w;
     block[1] = context[1].w;
 
-    __m128i T0, T1;
-    __m128i a[2], b[2], c[2], d[2], e[2], f[2], g[2], h[2];
+    __m256i T0, T1;
+    __m256i a[2], b[2], c[2], d[2], e[2], f[2], g[2], h[2];
     INIT(a, 0)
     INIT(b, 1)
     INIT(c, 2)
