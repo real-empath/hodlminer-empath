@@ -1073,17 +1073,16 @@ static void *miner_thread(void *userdata)
 	int thr_id = mythr->id;
 	struct work work = {{0}};
 	uint32_t end_nonce = 0xffffffffU / opt_n_threads * (thr_id + 1) - 0x20;
-	//char *scratchpad = NULL;
-	char s[16];
+	char s[1000];
 	int i;
 
 	/* Set worker threads to nice 19 and then preferentially to SCHED_IDLE
 	 * and if that fails, then SCHED_BATCH. No need for this to be an
 	 * error if it fails */
-	if (!opt_benchmark) {
-		setpriority(PRIO_PROCESS, 0, 19);
-		drop_policy();
-	}
+//	if (!opt_benchmark) {
+//		setpriority(PRIO_PROCESS, 0, 19);
+//		drop_policy();
+//	}
 
 	/* Cpu affinity only makes sense if the number of threads is a multiple
 	 * of the number of CPUs */
@@ -1096,40 +1095,41 @@ static void *miner_thread(void *userdata)
 	
 	while (1) {
 		unsigned long hashes_done;
-		struct timeval tv_start, tv_end, diff;
+		struct timeval tv_start, tv_mid, tv_end, diff;
 		int rc;
 
 		pthread_barrier_wait( &bar );
 		if(thr_id == 0) {
 		    if (have_stratum) {
-			while (time(NULL) >= g_work_time + 120)
-				sleep(1);
-			pthread_mutex_lock(&g_work_lock);
-			if (work.data[19] >= end_nonce && !memcmp(work.data, g_work.data, 76))
-				stratum_gen_work(&stratum, &g_work);
+                while (time(NULL) >= g_work_time + 120)
+                    sleep(1);
+                pthread_mutex_lock(&g_work_lock);
+                if (work.data[19] >= end_nonce && !memcmp(work.data, g_work.data, 76)) {
+                    stratum_gen_work(&stratum, &g_work);
+                }
 		    } else {
-			int min_scantime = have_longpoll ? LP_SCANTIME : opt_scantime;
-			/* obtain new work from internal workio thread */
-			pthread_mutex_lock(&g_work_lock);
-			if (!have_stratum &&
-			    (time(NULL) - g_work_time >= min_scantime ||
-			     work.data[19] >= end_nonce)) {
-				if (unlikely(!get_work(mythr, &g_work))) {
-					applog(LOG_ERR, "work retrieval failed, exiting "
-						"mining thread %d", mythr->id);
-					pthread_mutex_unlock(&g_work_lock);
-					goto out;
-				}
-				g_work_time = have_stratum ? 0 : time(NULL);
-			}
-			if (have_stratum) {
-				pthread_mutex_unlock(&g_work_lock);
-				continue;
-			}
+                int min_scantime = have_longpoll ? LP_SCANTIME : opt_scantime;
+                /* obtain new work from internal workio thread */
+                pthread_mutex_lock(&g_work_lock);
+                if (!have_stratum &&
+                    (time(NULL) - g_work_time >= min_scantime ||
+                     work.data[19] >= end_nonce)) {
+                    if (unlikely(!get_work(mythr, &g_work))) {
+                        applog(LOG_ERR, "work retrieval failed, exiting "
+                            "mining thread %d", mythr->id);
+                        pthread_mutex_unlock(&g_work_lock);
+                        goto out;
+                    }
+                    g_work_time = have_stratum ? 0 : time(NULL);
+                }
+                if (have_stratum) {
+                    pthread_mutex_unlock(&g_work_lock);
+                    continue;
+                }
 		    }
 		    if (memcmp(hodl_work.data, g_work.data, 76)) {
-			work_free(&hodl_work);
-			work_copy(&hodl_work, &g_work);
+                work_free(&hodl_work);
+                work_copy(&hodl_work, &g_work);
 		    }
 		    pthread_mutex_unlock(&g_work_lock);
 
@@ -1139,14 +1139,20 @@ static void *miner_thread(void *userdata)
 		pthread_barrier_wait( &bar );		
 
 		if (memcmp(work.data, hodl_work.data, 76)) {
-                        work_free(&work);
-                        work_copy(&work, &hodl_work);
-                }
+            work_free(&work);
+            work_copy(&work, &hodl_work);
+        }
 		work.data[19] = swab32(nNonce);
 
 		gettimeofday(&tv_start, NULL);
 		GenRandomGarbage(scratchpad, opt_n_threads, work.data, thr_id);
+
+		gettimeofday(&tv_mid, NULL);
+		timeval_subtract(&diff, &tv_mid, &tv_start);
+		printf("Time for GenRandomGarbage: %f\n", (diff.tv_sec + 1e-6 * diff.tv_usec));
+
 		pthread_barrier_wait( &bar );
+		gettimeofday(&tv_mid, NULL);
 
 		work_restart[thr_id].restart = 0;
 		
@@ -1157,6 +1163,10 @@ static void *miner_thread(void *userdata)
 
 		/* record scanhash elapsed time */
 		gettimeofday(&tv_end, NULL);
+
+		timeval_subtract(&diff, &tv_end, &tv_mid);
+		printf("Time for scanhash_hodl: %f\n", (diff.tv_sec + 1e-6 * diff.tv_usec));
+
 		timeval_subtract(&diff, &tv_end, &tv_start);
 		if (diff.tv_usec || diff.tv_sec) {
 			pthread_mutex_lock(&stats_lock);
