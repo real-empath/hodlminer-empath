@@ -14,8 +14,8 @@
 #if (SHA384_SUPPORT == ENABLED || SHA512_SUPPORT == ENABLED || SHA512_224_SUPPORT == ENABLED || SHA512_256_SUPPORT == ENABLED)
 
 //SHA-512 auxiliary functions
-#define CH(x, y, z) (((x) & (y)) | (~(x) & (z)))
-#define MAJ(x, y, z) (((x) & (y)) | ((x) & (z)) | ((y) & (z)))
+#define Ch(x, y, z) (((x) & (y)) | (~(x) & (z)))
+#define Maj(x, y, z) (((x) & (y)) | ((x) & (z)) | ((y) & (z)))
 #define SIGMA1(x) (ROR64(x, 28) ^ ROR64(x, 34) ^ ROR64(x, 39))
 #define SIGMA2(x) (ROR64(x, 14) ^ ROR64(x, 18) ^ ROR64(x, 41))
 #define SIGMA3(x) (ROR64(x, 1)  ^ ROR64(x, 8)  ^ SHR64(x, 7))
@@ -97,8 +97,6 @@ int sha512Compute32b(const void *data, uint8_t *digest) {
     for(int i=0; i<10; ++i) {
         context.w[i+4] = _mm_set1_epi64x( ((uint64_t*)padding)[i] );
     }
-//    memcpy(context.buffer, data, 32);
-//    memcpy(context.buffer + 32, padding, 80);
 
     //Length of the original message (before padding)
     uint64_t totalSize = 32 * 8;
@@ -122,67 +120,72 @@ int sha512Compute32b(const void *data, uint8_t *digest) {
     return 0;
 }
 
-/**
- * @brief Process message in 16-word blocks
- * @param[in] context Pointer to the SHA-512 context
- **/
+#define blk0(i) (block[i] = mm_betoh_epi64(block[i]))
+#define blk(i)  (block[i] = block[i - 16] + SIGMA3(block[i - 15]) + \
+                            SIGMA4(block[i - 2]) + block[i - 7])
+
+#define ROUND512(a,b,c,d,e,f,g,h)   \
+    T1 += (h) + SIGMA2(e) + Ch((e), (f), (g)) + k[i]; \
+    (d) += T1; \
+    (h) = T1 + SIGMA1(a) + Maj((a), (b), (c)); \
+    i++
+
+#define ROUND512_0_TO_15(a,b,c,d,e,f,g,h)   \
+    T1 = blk0(i); \
+    ROUND512(a,b,c,d,e,f,g,h)
+
+#define ROUND512_16_TO_80(a,b,c,d,e,f,g,h)   \
+    T1 = blk(i); \
+    ROUND512(a,b,c,d,e,f,g,h)
+
+#define R512_0 \
+    ROUND512_0_TO_15(a, b, c, d, e, f, g, h); \
+    ROUND512_0_TO_15(h, a, b, c, d, e, f, g); \
+    ROUND512_0_TO_15(g, h, a, b, c, d, e, f); \
+    ROUND512_0_TO_15(f, g, h, a, b, c, d, e); \
+    ROUND512_0_TO_15(e, f, g, h, a, b, c, d); \
+    ROUND512_0_TO_15(d, e, f, g, h, a, b, c); \
+    ROUND512_0_TO_15(c, d, e, f, g, h, a, b); \
+    ROUND512_0_TO_15(b, c, d, e, f, g, h, a)
+
+#define R512_16 \
+    ROUND512_16_TO_80(a, b, c, d, e, f, g, h); \
+    ROUND512_16_TO_80(h, a, b, c, d, e, f, g); \
+    ROUND512_16_TO_80(g, h, a, b, c, d, e, f); \
+    ROUND512_16_TO_80(f, g, h, a, b, c, d, e); \
+    ROUND512_16_TO_80(e, f, g, h, a, b, c, d); \
+    ROUND512_16_TO_80(d, e, f, g, h, a, b, c); \
+    ROUND512_16_TO_80(c, d, e, f, g, h, a, b); \
+    ROUND512_16_TO_80(b, c, d, e, f, g, h, a)
 
 void sha512ProcessBlock(Sha512Context *context)
 {
-   uint32_t t;
-   __m128i temp1;
-   __m128i temp2;
+    __m128i* block = context->w;
+    __m128i T1;
 
-   //Initialize the 8 working registers
-   __m128i a = context->h[0];
-   __m128i b = context->h[1];
-   __m128i c = context->h[2];
-   __m128i d = context->h[3];
-   __m128i e = context->h[4];
-   __m128i f = context->h[5];
-   __m128i g = context->h[6];
-   __m128i h = context->h[7];
+    __m128i a = context->h[0];
+    __m128i b = context->h[1];
+    __m128i c = context->h[2];
+    __m128i d = context->h[3];
+    __m128i e = context->h[4];
+    __m128i f = context->h[5];
+    __m128i g = context->h[6];
+    __m128i h = context->h[7];
 
-   //Process message in 16-word blocks
-   __m128i *w = context->w;
+    int i = 0;
+    R512_0; R512_0;
+    for(int j=0; j<8; ++j) {
+        R512_16;
+    }
 
-   //Convert from big-endian byte order to host byte order
-   for(t = 0; t < 16; t++) {
-      w[t] = mm_betoh_epi64(w[t]);
-   }
-
-   //Prepare the message schedule
-   for(t = 16; t < 80; t++) {
-      w[t] = SIGMA4(w[t - 2]) + w[t - 7] + SIGMA3(w[t - 15]) + w[t - 16];
-   }
-
-   //SHA-512 hash computation
-   for(t = 0; t < 80; t++)
-   {
-      //Calculate T1 and T2
-      temp1 = h + SIGMA2(e) + CH(e, f, g) + k[t] + w[t];
-      temp2 = SIGMA1(a) + MAJ(a, b, c);
-
-      //Update the working registers
-      h = g;
-      g = f;
-      f = e;
-      e = d + temp1;
-      d = c;
-      c = b;
-      b = a;
-      a = temp1 + temp2;
-   }
-
-   //Update the hash value
-   context->h[0] += a;
-   context->h[1] += b;
-   context->h[2] += c;
-   context->h[3] += d;
-   context->h[4] += e;
-   context->h[5] += f;
-   context->h[6] += g;
-   context->h[7] += h;
+    context->h[0] += a;
+    context->h[1] += b;
+    context->h[2] += c;
+    context->h[3] += d;
+    context->h[4] += e;
+    context->h[5] += f;
+    context->h[6] += g;
+    context->h[7] += h;
 }
 
 #endif
