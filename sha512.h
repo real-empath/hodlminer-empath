@@ -34,8 +34,8 @@ typedef struct
 #endif
 
 //SHA-512 related functions
-int sha512Compute32b_parallel(
-        const uint64_t *data[SHA512_PARALLEL_N],
+void sha512Compute32b_parallel(
+        uint64_t *data[SHA512_PARALLEL_N],
         uint64_t *digest[SHA512_PARALLEL_N]);
 
 void sha512ProcessBlock(Sha512Context *context);

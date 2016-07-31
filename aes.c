@@ -94,7 +94,7 @@ void ExpandAESKey256(__m128i *keys, const __m128i *KeyBuf)
     AESENC(i,7) \
 
 
-static inline void AES256Core(__m128i* State, const __m128i ExpandedKey[][16])
+static inline void AES256Core(__m128i* State, __m128i ExpandedKey[][16])
 {
     const uint32_t N = AES_PARALLEL_N;
 
@@ -121,7 +121,7 @@ static inline void AES256Core(__m128i* State, const __m128i ExpandedKey[][16])
     }        
 }
 
-void AES256CBC(__m128i** data, const __m128i** next, const __m128i ExpandedKey[][16], __m128i* IV)
+void AES256CBC(__m128i** data, const __m128i** next, __m128i ExpandedKey[][16], __m128i* IV)
 {
     const uint32_t N = AES_PARALLEL_N;
     __m128i State[N];
