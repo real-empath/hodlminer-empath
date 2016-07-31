@@ -127,8 +127,9 @@ void AES256CBC(__m128i** data, const __m128i** next, const __m128i ExpandedKey[]
 {
     const uint32_t N = AES_PARALLEL_N;
     __m128i State[N];
-    for(int j=0; j<N; ++j)
+    for(int j=0; j<N; ++j) {
         State[j] = _mm_xor_si128( _mm_xor_si128(data[j][0], next[j][0]), IV[j]);
+    }
 
     AES256Core(State, ExpandedKey);
     for(int j=0; j<N; ++j)
