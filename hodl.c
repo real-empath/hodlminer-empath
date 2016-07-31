@@ -11,7 +11,6 @@
 
 void GenerateGarbageCore(CacheEntry *Garbage, int ThreadID, int ThreadCount, void *MidHash)
 {
-    printf("GenerateGarbageCore\n");
     uint64_t* TempBufs[SHA512_PARALLEL_N];
     uint64_t* desination[SHA512_PARALLEL_N];
 
@@ -21,8 +20,7 @@ void GenerateGarbageCore(CacheEntry *Garbage, int ThreadID, int ThreadCount, voi
     }
 
     uint32_t StartChunk = ThreadID * (TOTAL_CHUNKS / ThreadCount);
-    for(uint32_t i = StartChunk; i < StartChunk + (TOTAL_CHUNKS / ThreadCount); i+= SHA512_PARALLEL_N)
-    {
+    for(uint32_t i = StartChunk; i < StartChunk + (TOTAL_CHUNKS / ThreadCount); i+= SHA512_PARALLEL_N) {
         for(int j=0; j<SHA512_PARALLEL_N; ++j) {
             ((uint32_t*)TempBufs[j])[0] = i + j;
             desination[j] = (uint64_t*)((uint8_t *)Garbage + ((i+j) * GARBAGE_CHUNK_SIZE));
@@ -42,7 +40,6 @@ void Rev256(uint32_t *Dest, const uint32_t *Src)
 
 int scanhash_hodl(int threadNumber, int totalThreads, uint32_t *pdata, const CacheEntry *Garbage, const uint32_t *ptarget, unsigned long *hashes_done)
 {
-    printf("starting scanhash_hodl %d\n", threadNumber);
     uint32_t CollisionCount = 0;
     CacheEntry Cache[AES_PARALLEL_N];
 
@@ -59,9 +56,10 @@ int scanhash_hodl(int threadNumber, int totalThreads, uint32_t *pdata, const Cac
 
     for(int32_t k = startLoc; k < startLoc + searchNumber && !work_restart[threadNumber].restart; k+=AES_PARALLEL_N)
     {
-        // copy data to first l2 cache
-        for (int n=0; n<AES_PARALLEL_N; ++n)
+        // Copy data
+        for (int n=0; n<AES_PARALLEL_N; ++n) {
             memcpy(Cache[n].dwords, Garbage + k + n, GARBAGE_SLICE_SIZE);
+        }
 
         for(int j = 0; j < AES_ITERATIONS; ++j)
         {
