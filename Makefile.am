@@ -11,14 +11,14 @@ EXTRA_DIST	= example-cfg.json nomacro.pl
 
 SUBDIRS		= compat
 
-AM_CFLAGS 	+= $(PTHREAD_FLAGS) -march=native -Ofast -flto -fuse-linker-plugin -std=gnu11 $(JANSSON_INCLUDES)
+AM_CFLAGS 	+= $(PTHREAD_FLAGS) -march=native -O3 -fuse-linker-plugin -std=gnu11 $(JANSSON_INCLUDES)
 
 bin_PROGRAMS	= hodlminer
 
 dist_man_MANS	= hodlminer.1
 
 hodlminer_SOURCES	= elist.h miner.h compat.h \
-		  	  sha2.c cpu-miner.c util.c hodl.c aes.c
+		  	  sha2.c cpu-miner.c util.c hodl.c aes.c sha512_avx.c sha512_avx2.c
 
 hodlminer_LDFLAGS	= $(PTHREAD_FLAGS)
 hodlminer_LDADD		= @LIBCURL@ @JANSSON_LIBS@ @PTHREAD_LIBS@ @WS2_LIBS@ -lssl -lcrypto
