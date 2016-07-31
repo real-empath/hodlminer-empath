@@ -1152,6 +1152,7 @@ static void *miner_thread(void *userdata)
 
 		gettimeofday(&tv_mid, NULL);
 		timeval_subtract(&diff, &tv_mid, &tv_start);
+		printf("Time for GenRandomGarbage: %f\n", (diff.tv_sec + 1e-6 * diff.tv_usec));
 
 		pthread_barrier_wait( &bar );
 		gettimeofday(&tv_mid, NULL);
