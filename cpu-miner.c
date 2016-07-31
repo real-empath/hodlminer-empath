@@ -1168,8 +1168,6 @@ static void *miner_thread(void *userdata)
 		gettimeofday(&tv_end, NULL);
 
 		timeval_subtract(&diff, &tv_end, &tv_mid);
-		printf("Time for scanhash_hodl: %f\n", (diff.tv_sec + 1e-6 * diff.tv_usec));
-
 		timeval_subtract(&diff, &tv_end, &tv_start);
 		if (diff.tv_usec || diff.tv_sec) {
 			pthread_mutex_lock(&stats_lock);
