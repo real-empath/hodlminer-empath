@@ -110,6 +110,7 @@ static const char *algo_names[] = {
 };
 
 bool opt_debug = false;
+static bool opt_drop_priority = false;
 bool opt_protocol = false;
 static bool opt_benchmark = false;
 bool opt_redirect = true;
@@ -183,6 +184,7 @@ Options:\n\
       --cert=FILE       certificate for mining server using SSL\n\
   -x, --proxy=[PROTOCOL://]HOST[:PORT]  connect through a proxy\n\
   -t, --threads=N       number of miner threads (default: number of processors)\n\
+  -d, --drop-priority   if true reduces thread priorities\n\
   -r, --retries=N       number of times to retry if a network call fails\n\
                           (default: retry indefinitely)\n\
   -R, --retry-pause=N   time to pause between retries, in seconds (default: 30)\n\
@@ -221,7 +223,7 @@ static char const short_options[] =
 #ifdef HAVE_SYSLOG_H
 	"S"
 #endif
-	"a:c:Dhp:Px:qr:R:s:t:T:o:u:O:V";
+	"a:c:Dhp:Px:qr:R:s:t:T:o:u:O:V:d";
 
 static struct option const options[] = {
 	{ "algo", 1, NULL, 'a' },
@@ -234,6 +236,7 @@ static struct option const options[] = {
 	{ "coinbase-sig", 1, NULL, 1015 },
 	{ "config", 1, NULL, 'c' },
 	{ "debug", 0, NULL, 'D' },
+	{ "drop-priority", 0, NULL, 'd' },
 	{ "help", 0, NULL, 'h' },
 	{ "no-gbt", 0, NULL, 1011 },
 	{ "no-getwork", 0, NULL, 1010 },
@@ -1079,7 +1082,7 @@ static void *miner_thread(void *userdata)
 	/* Set worker threads to nice 19 and then preferentially to SCHED_IDLE
 	 * and if that fails, then SCHED_BATCH. No need for this to be an
 	 * error if it fails */
-	if (!opt_benchmark) {
+	if (opt_drop_priority) {
 		setpriority(PRIO_PROCESS, 0, 19);
 		drop_policy();
 	}
@@ -1495,6 +1498,9 @@ static void parse_arg(int key, char *arg, char *pname)
 		break;
 	case 'B':
 		opt_background = true;
+		break;
+	case 'd':
+		opt_drop_priority = true;
 		break;
 	case 'c': {
 		json_error_t err;
