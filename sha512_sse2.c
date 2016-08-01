@@ -217,5 +217,5 @@ void sha512ProcessBlock(Sha512Context context[2])
     context[1].h[7] += h[1];
 }
 
-#endif // __AVX__
+#endif // __SSE2__
 #endif // __AVX2__
