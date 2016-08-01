@@ -10,9 +10,9 @@
 #define SHA512_DIGEST_SIZE 64
 
 #ifndef __AVX2__
-#ifndef __AVX__
-#error "Either AVX or AVX2 supported needed"
-#endif // __AVX__
+#ifndef __SSE2__
+#error "Either SSE2 or AVX2 supported needed"
+#endif // __SSE2__
 #endif // __AVX2__
 
 
@@ -21,7 +21,7 @@ typedef struct
 #ifdef __AVX2__
    __m256i h[8];
    __m256i w[80];
-#else // AVX
+#else // SSE2
    __m128i h[8];
    __m128i w[80];
 #endif
@@ -29,7 +29,7 @@ typedef struct
 
 #ifdef __AVX2__
 #define SHA512_PARALLEL_N 8
-#else // AVX
+#else // SSE2
 #define SHA512_PARALLEL_N 4
 #endif
 
