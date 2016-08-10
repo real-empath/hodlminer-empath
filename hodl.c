@@ -4,6 +4,7 @@
 #include <x86intrin.h>
 #include <emmintrin.h>
 #include "sha512.h"
+#include <mm_malloc.h>
 
 #include "hodl.h"
 #include "miner.h"
@@ -15,7 +16,7 @@ void GenerateGarbageCore(CacheEntry *Garbage, int ThreadID, int ThreadCount, voi
     uint64_t* desination[SHA512_PARALLEL_N];
 
     for (int i=0; i<SHA512_PARALLEL_N; ++i) {
-        TempBufs[i] = (uint64_t*)malloc(32);
+        TempBufs[i] = (uint64_t*)_mm_malloc(32, 32);
         memcpy(TempBufs[i], MidHash, 32);
     }
 
@@ -29,7 +30,7 @@ void GenerateGarbageCore(CacheEntry *Garbage, int ThreadID, int ThreadCount, voi
     }
 
     for (int i=0; i<SHA512_PARALLEL_N; ++i) {
-        free(TempBufs[i]);
+        _mm_free(TempBufs[i]);
     }
 }
 

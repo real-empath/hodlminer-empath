@@ -1,20 +1,23 @@
 #ifndef _SHA512_H
 #define _SHA512_H
 
-#include <stdint.h>
-#include "emmintrin.h"
-
-//SHA-512 block size
-#define SHA512_BLOCK_SIZE 128
-//SHA-512 digest size
-#define SHA512_DIGEST_SIZE 64
-
 #ifndef __AVX2__
 #ifndef __SSE2__
 #error "Either SSE2 or AVX2 supported needed"
 #endif // __SSE2__
 #endif // __AVX2__
 
+#include <stdint.h>
+
+#include <emmintrin.h>
+#ifdef __AVX2__
+#include <immintrin.h>
+#endif
+
+//SHA-512 block size
+#define SHA512_BLOCK_SIZE 128
+//SHA-512 digest size
+#define SHA512_DIGEST_SIZE 64
 
 typedef struct
 {
