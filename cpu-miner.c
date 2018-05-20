@@ -26,6 +26,7 @@
 #include <errno.h>
 #include <signal.h>
 #include <sys/resource.h>
+#include <sys/mman.h>
 #if HAVE_SYS_SYSCTL_H
 #include <sys/types.h>
 #if HAVE_SYS_PARAM_H
@@ -1168,6 +1169,7 @@ static void *miner_thread(void *userdata)
 		gettimeofday(&tv_end, NULL);
 
 		timeval_subtract(&diff, &tv_end, &tv_mid);
+		printf("Time for Scan: %f\n", (diff.tv_sec + 1e-6 * diff.tv_usec));
 		timeval_subtract(&diff, &tv_end, &tv_start);
 		if (diff.tv_usec || diff.tv_sec) {
 			pthread_mutex_lock(&stats_lock);
@@ -1922,7 +1924,20 @@ int main(int argc, char *argv[])
 
 	if (opt_algo == ALGO_HODL )
 	{
-		scratchpad = (CacheEntry *)_mm_malloc(1 << 30, 32);
+		#ifdef __linux__
+		scratchpad = (CacheEntry*)mmap(NULL, 1 << 30, PROT_READ | PROT_WRITE,  (MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB), -1, 0);
+		if (scratchpad == MAP_FAILED) {
+			applog(LOG_INFO, "Could not mmap scratchpad with MAP_HUGETLB. Execute 'echo 512 > /proc/sys/vm/nr_hugepages' to allocate hugepages.");
+			scratchpad = (CacheEntry*)mmap(NULL, 1 << 30, PROT_READ | PROT_WRITE,  (MAP_PRIVATE | MAP_ANONYMOUS ), -1, 0);
+		}
+		if (scratchpad == MAP_FAILED) {
+			applog(LOG_ERR, "mmap failed. Could not allocate scratchpad.");
+			return 1;
+		}
+
+		#else
+		scratchpad= (CacheEntry *)_mm_malloc(1<<30, 32);
+		#endif
 	}
 
 	for (i = 0; i < opt_n_threads; i++) {
