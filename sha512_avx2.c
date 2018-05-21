@@ -69,7 +69,7 @@ static const uint64_t k[80] =
    0x4CC5D4BECB3E42B6, 0x597F299CFC657E2A, 0x5FCB6FAB3AD6FAEC, 0x6C44198C4A475817
 };
 
-void transpose64bit4x4(__m256i* I0, __m256i* I1, __m256i* I2, __m256i* I3) {
+inline void transpose64bit4x4(__m256i* I0, __m256i* I1, __m256i* I2, __m256i* I3) {
     __m256i T0 = _mm256_unpacklo_epi64(*I0, *I1);
     __m256i T1 = _mm256_unpacklo_epi64(*I2, *I3);
     __m256i T2 = _mm256_unpackhi_epi64(*I0, *I1);
