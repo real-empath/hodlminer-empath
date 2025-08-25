@@ -1,166 +1,147 @@
-hodlminer (CPU)
+# hodlminer (CPU)
 
-Multi-threaded CPU miner focused on the HODL algorithm (Litecoin/Bitcoin fork lineage; derived from Jeff Garzik’s reference cpuminer and later work by pooler & others).
+Multi-threaded CPU miner focused on the **HODL** algorithm (Litecoin/Bitcoin fork lineage; derived from Jeff Garzik’s reference `cpuminer` and later work by pooler & others).
 
-License: GPLv2 (see COPYING)
+- License: **GPLv2** (see `COPYING`)
+- Git: `https://github.com/pooler/cpuminer` (original) — this fork includes HODL additions and memory-handling options
+- Downloads (legacy): `https://sourceforge.net/projects/cpuminer/files/`
 
-Git: https://github.com/pooler/cpuminer (original) — this fork includes HODL additions and memory-handling options
+## Features (HODL)
 
-Downloads (legacy): https://sourceforge.net/projects/cpuminer/files/
+- Parallel AES-256-CBC over a 1 GiB scratchpad (shared across threads)
+- x86/SSE2 code paths, optional AVX/AVX2/XOP where supported
+- Stratum, getwork/GBT (legacy) support
+- New runtime toggles for memory behavior:
+  - `--no-hugepages` – disable huge pages (hugetlb/THP hints)
+  - `--no-pretouch` – skip faulting the 1 GiB region up front
+  - `--no-mlock` – don’t `mlock()` the scratchpad
 
-Features (HODL)
+---
 
-Parallel AES-256-CBC over a 1 GiB scratchpad (shared across threads)
+## Build Requirements
 
-x86/SSE2 code paths, optional AVX/AVX2/XOP where supported
+### Common
+- C toolchain with **SSE2** support (x86/x86-64 recommended)
+- **autotools**: `autoconf`, `automake`, `libtool`, `pkg-config`
+- **libcurl** (with SSL backend)
+- **jansson** (JSON). A copy is included in-tree; system package works too.
+- **OpenSSL** (for SHA/EVP) or compatible headers/libs
+- **pthread**s
 
-Stratum, getwork/GBT (legacy) support
-
-New runtime toggles for memory behavior:
-
---no-hugepages – disable huge pages (hugetlb/THP hints)
-
---no-pretouch – skip faulting the 1 GiB region up front
-
---no-mlock – don’t mlock() the scratchpad
-
-Build Requirements
-Common
-
-C toolchain with SSE2 support (x86/x86-64 recommended)
-
-autotools: autoconf, automake, libtool, pkg-config
-
-libcurl (with SSL backend)
-
-jansson (JSON). A copy is included in-tree; system package works too.
-
-OpenSSL (for SHA/EVP) or compatible headers/libs
-
-pthreads
-
-Linux (Debian/Ubuntu example)
+### Linux (Debian/Ubuntu example)
+```bash
 sudo apt-get update
-sudo apt-get install -y build-essential automake autoconf libtool pkg-config \
-    libcurl4-openssl-dev libssl-dev
+sudo apt-get install -y build-essential automake autoconf libtool pkg-config     libcurl4-openssl-dev libssl-dev
 # jansson is bundled; if you prefer system jansson:
 # sudo apt-get install -y libjansson-dev
+```
 
-Fedora/RHEL/CentOS
-sudo dnf install -y gcc gcc-c++ make autoconf automake libtool pkgconf-pkg-config \
-    libcurl-devel openssl-devel jansson-devel
+### Fedora/RHEL/CentOS
+```bash
+sudo dnf install -y gcc gcc-c++ make autoconf automake libtool pkgconf-pkg-config     libcurl-devel openssl-devel jansson-devel
+```
 
-macOS (Homebrew)
+### macOS (Homebrew)
+```bash
 brew install autoconf automake libtool pkg-config curl openssl@3 jansson
 # Note: point configure to Homebrew OpenSSL if needed:
 export CPPFLAGS="-I$(brew --prefix openssl@3)/include"
 export LDFLAGS="-L$(brew --prefix openssl@3)/lib"
+```
 
-Windows (MSYS2/MinGW-w64 recommended)
+### Windows (MSYS2/MinGW-w64 recommended)
+1) Install **MSYS2**: https://www.msys2.org/  
+2) In *MSYS2 MINGW64* shell:
+```bash
+pacman -S --needed mingw-w64-x86_64-toolchain   mingw-w64-x86_64-libcurl mingw-w64-x86_64-openssl   mingw-w64-x86_64-jansson git autoconf automake libtool make pkg-config
+```
+3) Build using the MINGW64 environment (see steps below).  
+> Note: the legacy MinGW/“Developer Toolkit” instructions also work, but MSYS2 is simpler today.
 
-Install MSYS2: https://www.msys2.org/
+---
 
-In MSYS2 MINGW64 shell:
+## Building
 
-pacman -S --needed mingw-w64-x86_64-toolchain \
-  mingw-w64-x86_64-libcurl mingw-w64-x86_64-openssl \
-  mingw-w64-x86_64-jansson git autoconf automake libtool make pkg-config
-
-
-Build using the MINGW64 environment (see steps below).
-
-Note: the legacy MinGW/“Developer Toolkit” instructions also work, but MSYS2 is simpler today.
-
-Building
-*nix (Linux/macOS/BSD)
+### *nix (Linux/macOS/BSD)
+```bash
 ./autogen.sh            # only if building from a git checkout
 ./nomacro.pl            # only needed on macOS or with Clang
 ./configure CFLAGS="-O3"    # add CPPFLAGS/LDFLAGS for OpenSSL if needed
 make -j$(nproc)             # use appropriate core count
+```
 
-Windows (MSYS2 MinGW64)
+### Windows (MSYS2 MinGW64)
+```bash
 ./autogen.sh            # if building from git
 ./configure CFLAGS="-O3"
 make -j8
+```
 
-Architecture Notes
+---
 
-ARM / PowerPC: no runtime CPU detection; enable NEON/AltiVec via CFLAGS if you port.
+## Architecture Notes
 
-x86 (32-bit): runtime check enables SSE2 when available.
+- **ARM / PowerPC**: no runtime CPU detection; enable NEON/AltiVec via CFLAGS if you port.
+- **x86 (32-bit)**: runtime check enables SSE2 when available.
+- **x86-64**: may use AVX/AVX2/XOP when both CPU *and OS* support them.  
+  - Linux: AVX since 2.6.30  
+  - FreeBSD: AVX since 9.1  
+  - macOS: AVX since 10.6.8  
+  - Windows: AVX since Windows 7 SP1 / 2008 R2 SP1  
+  The build will warn if the assembler lacks a given ISA; the miner still works, just without that optimization.
 
-x86-64: may use AVX/AVX2/XOP when both CPU and OS support them.
+---
 
-Linux: AVX since 2.6.30
+## HODL Scratchpad (Memory)
 
-FreeBSD: AVX since 9.1
+- Requires **~1 GiB** contiguous virtual memory per **process** (shared across threads).
+- Defaults:
+  - **Huge pages** hint **ON** (hugetlb/THP where available)
+  - **Pretouch** **ON** (faults in the 1 GiB region at startup to avoid runtime stalls)
+  - **mlock()** **ON** (keep scratchpad resident to reduce paging)
+- Turn any of these off at runtime:
+  - `--no-hugepages`
+  - `--no-pretouch`
+  - `--no-mlock`
 
-macOS: AVX since 10.6.8
-
-Windows: AVX since Windows 7 SP1 / 2008 R2 SP1
-The build will warn if the assembler lacks a given ISA; the miner still works, just without that optimization.
-
-HODL Scratchpad (Memory)
-
-Requires ~1 GiB contiguous virtual memory per process (shared across threads).
-
-Defaults:
-
-Huge pages hint ON (hugetlb/THP where available)
-
-Pretouch ON (faults in the 1 GiB region at startup to avoid runtime stalls)
-
-mlock() ON (keep scratchpad resident to reduce paging)
-
-Turn any of these off at runtime:
-
---no-hugepages
-
---no-pretouch
-
---no-mlock
-
-Linux: enabling huge pages (optional, recommended)
-
-Transparent Huge Pages (THP) (easiest):
-
+### Linux: enabling huge pages (optional, recommended)
+**Transparent Huge Pages (THP)** (easiest):
+```bash
 # Prefer THP in "madvise" mode (global)
 echo madvise | sudo tee /sys/kernel/mm/transparent_hugepage/enabled
-
-
-hugetlbfs (explicit huge pages):
-
+```
+**hugetlbfs** (explicit huge pages):
+```bash
 # Reserve e.g. 600 huge pages of 2 MiB each (~1.2 GiB total)
 echo 600 | sudo tee /proc/sys/vm/nr_hugepages
 sudo mkdir -p /mnt/huge
 sudo mount -t hugetlbfs none /mnt/huge
+```
+> The miner will attempt to use huge pages and fall back automatically if unavailable (you can force disable with `--no-hugepages`).
 
-
-The miner will attempt to use huge pages and fall back automatically if unavailable (you can force disable with --no-hugepages).
-
-Linux: mlock() permissions
-
+### Linux: mlock() permissions
 To allow locking ~1 GiB without running as root, either:
-
+```bash
 # Raise memlock limit for your shell/session
 ulimit -l unlimited
 # or set a specific limit in KB, e.g. ~1.2 GiB:
 ulimit -l 1250000
-
-
-or grant the binary CAP_IPC_LOCK:
-
+```
+or grant the binary `CAP_IPC_LOCK`:
+```bash
 sudo setcap 'cap_ipc_lock=+ep' ./hodlminer
+```
+Use `--no-mlock` if you don’t want to change limits.
 
+> On macOS and Windows, `mlock` / large pages are more constrained; the miner will degrade gracefully. The `--no-*` toggles are harmless on platforms that ignore them.
 
-Use --no-mlock if you don’t want to change limits.
+---
 
-On macOS and Windows, mlock / large pages are more constrained; the miner will degrade gracefully. The --no-* toggles are harmless on platforms that ignore them.
+## Usage
 
-Usage
+Run `./hodlminer --help` for the full list. Typical examples:
 
-Run ./hodlminer --help for the full list. Typical examples:
-
+```bash
 # Stratum (recommended)
 ./hodlminer -a hodl -o stratum+tcp://pool.example.com:3333 -O user.worker:pass
 
@@ -169,34 +150,29 @@ Run ./hodlminer --help for the full list. Typical examples:
 
 # Quiet mode with 8 threads and shorter scantime
 ./hodlminer -a hodl -o ... -O ... -q -t 8 -s 3
-
+```
 
 Proxy:
+- `--proxy=http://host:port`
+- SOCKS4/5: `--proxy=socks4://host:port` or `--proxy=socks5://host:port`
+- Remote DNS: `socks4a://` or `socks5h://` (libcurl ≥ 7.18.0)
+- If `--proxy` is not used, honors `http_proxy` and `all_proxy` env vars.
 
---proxy=http://host:port
+---
 
-SOCKS4/5: --proxy=socks4://host:port or --proxy=socks5://host:port
+## Troubleshooting
 
-Remote DNS: socks4a:// or socks5h:// (libcurl ≥ 7.18.0)
+- **“Could not allocate 1 GiB scratchpad.”**  
+  Insufficient contiguous virtual memory or over-strict limits. Try `--no-hugepages`, `--no-mlock`, and ensure enough free RAM/VM.
+- **Startup stalls / first-hash delay**  
+  This is the **pretouch** warming the 1 GiB region. Disable with `--no-pretouch` if you prefer faster startup (may add runtime latency spikes).
+- **Permission errors with `mlock`**  
+  See “mlock() permissions” above or run with `--no-mlock`.
+- **Low hashrate**  
+  Ensure your CPU supports the advertised ISA; try building with a newer compiler; close background memory hogs; keep THP on.
 
-If --proxy is not used, honors http_proxy and all_proxy env vars.
+---
 
-Troubleshooting
+## Acknowledgements
 
-“Could not allocate 1 GiB scratchpad.”
-Insufficient contiguous virtual memory or over-strict limits. Try --no-hugepages, --no-mlock, and ensure enough free RAM/VM.
-
-Startup stalls / first-hash delay
-This is the pretouch warming the 1 GiB region. Disable with --no-pretouch if you prefer faster startup (may add runtime latency spikes).
-
-Permission errors with mlock
-See “mlock() permissions” above or run with --no-mlock.
-
-Low hashrate
-Ensure your CPU supports the advertised ISA; try building with a newer compiler; close background memory hogs; keep THP on.
-
-Acknowledgements
-
-Thanks to Jeff Garzik, pooler, and contributors to the original cpuminer. This fork adds HODL-specific paths and memory handling toggles.
-
-If you want, I can tailor a shorter “Quick Start” section for your repo’s front page or add distro-specific package names you care about.
+Thanks to Jeff Garzik, pooler, and contributors to the original `cpuminer`. This fork adds HODL-specific paths and memory handling toggles.
