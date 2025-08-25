@@ -39,100 +39,102 @@ void Rev256(uint32_t *Dest, const uint32_t *Src)
     for(int i = 0; i < 8; ++i) Dest[i] = swab32(Src[i]);
 }
 
-int scanhash_hodl(int threadNumber, int totalThreads, uint32_t *pdata, const CacheEntry *Garbage, const uint32_t *ptarget, unsigned long *hashes_done)
+int scanhash_hodl(int threadNumber, int totalThreads, uint32_t *pdata,
+                  const CacheEntry *Garbage, const uint32_t *ptarget,
+                  unsigned long *hashes_done)
 {
     uint32_t CollisionCount = 0;
     CacheEntry Cache[AES_PARALLEL_N];
 
     __m128i* data[AES_PARALLEL_N];
-    __m128i* data0[AES_PARALLEL_N];
     const __m128i* next[AES_PARALLEL_N];
 
-    for(int n=0; n<AES_PARALLEL_N; ++n) {
+    for (int n = 0; n < AES_PARALLEL_N; ++n)
         data[n] = Cache[n].dqwords;
-    }
 
-    // Search for pattern in psuedorandom data
+    // Search for pattern in pseudorandom data
     int searchNumber = COMPARE_SIZE / totalThreads;
     int startLoc = threadNumber * searchNumber;
 
-    for(int32_t k = startLoc; k < startLoc + searchNumber && !work_restart[threadNumber].restart; k+=AES_PARALLEL_N)
+    for (int32_t k = startLoc;
+         k < startLoc + searchNumber && !work_restart[threadNumber].restart;
+         k += AES_PARALLEL_N)
     {
-        // Copy data
-        for (int n=0; n<AES_PARALLEL_N; ++n) {
-            memcpy(Cache[n].dwords, Garbage + k + n, GARBAGE_SLICE_SIZE);
-        	//data0[n] = Garbage[k+n].dqwords;
+        /* Copy & prefetch next slices to warm caches */
+        for (int n = 0; n < AES_PARALLEL_N; ++n) {
+            const CacheEntry* src = &Garbage[k + n];
+        #if defined(__GNUC__) || defined(__clang__)
+            __builtin_prefetch((const void*)&Garbage[(k + n + 32) & (COMPARE_SIZE - 1)], 0, 3);
+        #endif
+            /* 4 KiB copy; keep memcpy for best wide-move codegen */
+            memcpy(Cache[n].dwords, src, GARBAGE_SLICE_SIZE);
+            data[n] = Cache[n].dqwords;
         }
 
-        for(int j = 0; j < AES_ITERATIONS; ++j)
+        /* First round uses original Garbage[k+n] as the 'last' source.
+           Subsequent rounds use the evolving Cache. */
+        const __m128i* src_for_last[AES_PARALLEL_N];
+        for (int n = 0; n < AES_PARALLEL_N; ++n)
+            src_for_last[n] = Garbage[k + n].dqwords;
+
+        for (int j = 0; j < AES_ITERATIONS; ++j)
         {
             __m128i ExpKey[AES_PARALLEL_N][16];
             __m128i ivs[AES_PARALLEL_N];
 
-            // use last 4 bytes of first cache as next location
-            for(int n=0; n<AES_PARALLEL_N; ++n) {
-            	uint32_t nextLocation;
-            	if (j == 0) {
-            		nextLocation = Garbage[k+n].dwords[(GARBAGE_SLICE_SIZE >> 2) - 1] & (COMPARE_SIZE - 1); //% COMPARE_SIZE;
-            	} else {
-            		nextLocation = Cache[n].dwords[(GARBAGE_SLICE_SIZE >> 2) - 1] & (COMPARE_SIZE - 1); //% COMPARE_SIZE;
-            	}
+            for (int n = 0; n < AES_PARALLEL_N; ++n) {
+                const uint32_t* srcDW = (const uint32_t*) src_for_last[n];
+                uint32_t nextLocation =
+                    srcDW[(GARBAGE_SLICE_SIZE >> 2) - 1] & (COMPARE_SIZE - 1);
                 next[n] = Garbage[nextLocation].dqwords;
 
-                __m128i last[2];
-                if (j == 0) {
-                	last[0] = _mm_xor_si128(Garbage[k+n].dqwords[254], next[n][254]);
-                	last[1] = _mm_xor_si128(Garbage[k+n].dqwords[255], next[n][255]);
-                } else {
-                	last[0] = _mm_xor_si128(Cache[n].dqwords[254], next[n][254]);
-                	last[1] = _mm_xor_si128(Cache[n].dqwords[255], next[n][255]);
-                }
+                __m128i last0 = _mm_xor_si128(src_for_last[n][254], next[n][254]);
+                __m128i last1 = _mm_xor_si128(src_for_last[n][255], next[n][255]);
 
-                // Key is last 32b of Cache
-                // IV is last 16b of Cache
+                __m128i last[2] = { last0, last1 };
                 ExpandAESKey256(ExpKey[n], last);
-                ivs[n] = last[1];
+                ivs[n] = last1;
             }
-            if (j == 0) {
-            	AES256CBC(data, data, next, ExpKey, ivs);
-            } else {
-            	AES256CBC(data, data, next, ExpKey, ivs);
-            }
+
+            /* One AES-CBC pass per round; same call for all j */
+            AES256CBC(data, data, next, ExpKey, ivs);
+
+            /* After first pass, 'last' comes from Cache */
+            for (int n = 0; n < AES_PARALLEL_N; ++n)
+                src_for_last[n] = Cache[n].dqwords;
         }
 
-        // use last X bits as solution
-        for(int n=0; n<AES_PARALLEL_N; ++n)
-        if((Cache[n].dwords[(GARBAGE_SLICE_SIZE >> 2) - 1] & (COMPARE_SIZE - 1)) < 1000)
-        {
-            uint32_t BlockHdr[22], FinalPoW[8];
+        /* Use last X bits as solution */
+        for (int n = 0; n < AES_PARALLEL_N; ++n) {
+            if ((Cache[n].dwords[(GARBAGE_SLICE_SIZE >> 2) - 1] & (COMPARE_SIZE - 1)) < 1000) {
+                uint32_t BlockHdr[22], FinalPoW[8];
 
-            BlockHdr[0] = swab32(pdata[0]);
+                BlockHdr[0] = swab32(pdata[0]);
+                Rev256(BlockHdr + 1, pdata + 1);
+                Rev256(BlockHdr + 9, pdata + 9);
+                BlockHdr[17] = swab32(pdata[17]);
+                BlockHdr[18] = swab32(pdata[18]);
+                BlockHdr[19] = swab32(pdata[19]);
+                BlockHdr[20] = k + n;
+                BlockHdr[21] = Cache[n].dwords[(GARBAGE_SLICE_SIZE >> 2) - 2];
 
-            Rev256(BlockHdr + 1, pdata + 1);
-            Rev256(BlockHdr + 9, pdata + 9);
+                sha256d((uint8_t *)FinalPoW, (uint8_t *)BlockHdr, 88);
+                CollisionCount++;
 
-            BlockHdr[17] = swab32(pdata[17]);
-            BlockHdr[18] = swab32(pdata[18]);
-            BlockHdr[19] = swab32(pdata[19]);
-            BlockHdr[20] = k + n;
-            BlockHdr[21] = Cache[n].dwords[(GARBAGE_SLICE_SIZE >> 2) - 2];
-
-            sha256d((uint8_t *)FinalPoW, (uint8_t *)BlockHdr, 88);
-            CollisionCount++;
-
-            if(FinalPoW[7] <= ptarget[7])
-            {
-                pdata[20] = swab32(BlockHdr[20]);
-                pdata[21] = swab32(BlockHdr[21]);
-                *hashes_done = CollisionCount;
-                return(1);
+                if (FinalPoW[7] <= ptarget[7]) {
+                    pdata[20] = swab32(BlockHdr[20]);
+                    pdata[21] = swab32(BlockHdr[21]);
+                    *hashes_done = CollisionCount;
+                    return 1;
+                }
             }
         }
     }
 
     *hashes_done = CollisionCount;
-    return(0);
+    return 0;
 }
+
 
 void GenRandomGarbage(CacheEntry *Garbage, int totalThreads, uint32_t *pdata, int thr_id)
 {
