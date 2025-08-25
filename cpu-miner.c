@@ -130,6 +130,9 @@ static int opt_retries = -1;
 static int opt_fail_pause = 30;
 int opt_timeout = 0;
 static int opt_scantime = 5;
+static bool opt_hugepages = true;
+static bool opt_pretouch = true;
+static bool opt_mlock = true;
 static const bool opt_time = true;
 static enum algos opt_algo = ALGO_HODL;
 static int opt_n_threads;
@@ -200,6 +203,9 @@ Options:\n\
       --no-gbt          disable getblocktemplate support\n\
       --no-stratum      disable X-Stratum support\n\
       --no-redirect     ignore requests to change the URL of the mining server\n\
+      --no-hugepages    disable huge pages (MAP_HUGETLB / THP hint)\n\
+      --no-pretouch     do not fault-in 1 GiB scratchpad at startup\n\
+      --no-mlock        do not mlock() the scratchpad\n\
   -q, --quiet           disable per-thread hashmeter output\n\
   -D, --debug           enable debug output\n\
   -P, --protocol-dump   verbose dump of protocol-level activities\n"
@@ -244,6 +250,9 @@ static struct option const options[] = {
 	{ "no-getwork", 0, NULL, 1010 },
 	{ "no-longpoll", 0, NULL, 1003 },
 	{ "no-redirect", 0, NULL, 1009 },
+	{ "no-hugepages", 0, NULL, 2001 },
+	{ "no-pretouch",  0, NULL, 2002 },
+	{ "no-mlock",     0, NULL, 2003 },
 	{ "no-stratum", 0, NULL, 1007 },
 	{ "pass", 1, NULL, 'p' },
 	{ "protocol-dump", 0, NULL, 'P' },
@@ -1672,6 +1681,15 @@ static void parse_arg(int key, char *arg, char *pname)
 	case 1009:
 		opt_redirect = false;
 		break;
+	case 2001: /* --no-hugepages */
+		opt_hugepages = false;
+		break;
+	case 2002: /* --no-pretouch */
+		opt_pretouch = false;
+		break;
+	case 2003: /* --no-mlock */
+		opt_mlock = false;
+		break;		
 	case 1010:
 		allow_getwork = false;
 		break;
@@ -1924,18 +1942,19 @@ int main(int argc, char *argv[])
 	pthread_barrier_init( &bar, NULL, opt_n_threads);
 
     if (opt_algo == ALGO_HODL) {
-       const size_t BYTES = (size_t)1 << 30;  // 1 GiB
-       scratchpad = (CacheEntry*) hodl_alloc_scratchpad(BYTES,
-                                                        /*want_huge*/1,
-                                                        /*want_pretouch*/1,
-                                                        /*want_mlock*/1);
-       if (!scratchpad) {
-           applog(LOG_ERR, "Could not allocate 1 GiB scratchpad.");
-           return 1;
-       }
+        const size_t BYTES = (size_t)1 << 30;  // 1 GiB
+        scratchpad = (CacheEntry*) hodl_alloc_scratchpad(
+            BYTES,
+            opt_hugepages ? 1 : 0,
+            opt_pretouch  ? 1 : 0,
+            opt_mlock     ? 1 : 0
+        );
+        if (!scratchpad) {
+            applog(LOG_ERR, "Could not allocate 1 GiB scratchpad.");
+            return 1;
+        }
     }
-
-
+       
 	for (i = 0; i < opt_n_threads; i++) {
 		thr = &thr_info[i];
 
@@ -1957,12 +1976,7 @@ int main(int argc, char *argv[])
 
 	/* main loop - simply wait for workio thread to exit */
 	pthread_join(thr_info[work_thr_id].pth, NULL);
-
-    if (scratchpad) {
-       hodl_free_scratchpad(scratchpad, (size_t)1 << 30);
-       scratchpad = NULL;
-    }
-	
+    	
 	applog(LOG_INFO, "workio thread dead, exiting.");
 
 	return 0;
