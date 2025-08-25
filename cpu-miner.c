@@ -40,6 +40,7 @@
 #include "compat.h"
 #include "miner.h"
 #include "hodl.h"
+#include "scratchpad.h"
 
 #define PROGRAM_NAME		"hodlminer"
 #define LP_SCANTIME		60
@@ -1922,23 +1923,18 @@ int main(int argc, char *argv[])
 
 	pthread_barrier_init( &bar, NULL, opt_n_threads);
 
-	if (opt_algo == ALGO_HODL )
-	{
-		#ifdef __linux__
-		scratchpad = (CacheEntry*)mmap(NULL, 1 << 30, PROT_READ | PROT_WRITE,  (MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB), -1, 0);
-		if (scratchpad == MAP_FAILED) {
-			applog(LOG_INFO, "Could not mmap scratchpad with MAP_HUGETLB. Execute 'echo 512 > /proc/sys/vm/nr_hugepages' to allocate hugepages.");
-			scratchpad = (CacheEntry*)mmap(NULL, 1 << 30, PROT_READ | PROT_WRITE,  (MAP_PRIVATE | MAP_ANONYMOUS ), -1, 0);
-		}
-		if (scratchpad == MAP_FAILED) {
-			applog(LOG_ERR, "mmap failed. Could not allocate scratchpad.");
-			return 1;
-		}
+    if (opt_algo == ALGO_HODL) {
+       const size_t BYTES = (size_t)1 << 30;  // 1 GiB
+       scratchpad = (CacheEntry*) hodl_alloc_scratchpad(BYTES,
+                                                        /*want_huge*/1,
+                                                        /*want_pretouch*/1,
+                                                        /*want_mlock*/1);
+       if (!scratchpad) {
+           applog(LOG_ERR, "Could not allocate 1 GiB scratchpad.");
+           return 1;
+       }
+    }
 
-		#else
-		scratchpad= (CacheEntry *)_mm_malloc(1<<30, 32);
-		#endif
-	}
 
 	for (i = 0; i < opt_n_threads; i++) {
 		thr = &thr_info[i];
@@ -1962,6 +1958,11 @@ int main(int argc, char *argv[])
 	/* main loop - simply wait for workio thread to exit */
 	pthread_join(thr_info[work_thr_id].pth, NULL);
 
+    if (scratchpad) {
+       hodl_free_scratchpad(scratchpad, (size_t)1 << 30);
+       scratchpad = NULL;
+    }
+	
 	applog(LOG_INFO, "workio thread dead, exiting.");
 
 	return 0;
