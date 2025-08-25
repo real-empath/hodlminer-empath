@@ -8,7 +8,7 @@
 
 #include "hodl.h"
 #include "miner.h"
-#include "wolf-aes.h"
+#include "empath-aes-ng.h"
 
 void GenerateGarbageCore(CacheEntry *Garbage, int ThreadID, int ThreadCount, void *MidHash)
 {
