@@ -1,5 +1,5 @@
-#ifndef WOLF_AES_NG_H
-#define WOLF_AES_NG_H
+#ifndef EMPATH_AES_NG_H
+#define EMPATH_AES_NG_H
 
 #include <immintrin.h>
 #include <stdint.h>
@@ -27,4 +27,4 @@ void AES256CBC(__m128i* const dst[AES_PARALLEL_N],
                const __m128i      rk [AES_PARALLEL_N][16],
                const __m128i      ivs[AES_PARALLEL_N]);
 
-#endif /* WOLF_AES_NG_H */
+#endif /* EMPATH_AES_NG_H */
