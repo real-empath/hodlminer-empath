@@ -18,19 +18,27 @@ AM_CFLAGS  += $(PTHREAD_FLAGS) -march=native -O3 -fuse-linker-plugin -std=gnu11 
 bin_PROGRAMS   = hodlminer
 dist_man_MANS  = hodlminer.1
 
-# Pick the right scratchpad backend (requires WIN32 automake conditional set in configure.ac)
+# Pick the right scratchpad backend (WIN32 must be defined in configure.ac)
 if WIN32
 SCRATCHPAD_SRC = scratchpad_win.c
 else
 SCRATCHPAD_SRC = scratchpad_posix.c
 endif
 
+# Core sources (include headers you want packaged in 'make dist')
 hodlminer_SOURCES = \
-  elist.h miner.h compat.h scratchpad.h \
+  elist.h miner.h compat.h scratchpad.h empath-aes-ng.h \
   sha2.c cpu-miner.c util.c hodl.c \
   empath-aes-ng.c \
-  sha512_sse2.c sha512_avx2.c \
   $(SCRATCHPAD_SRC)
+
+# Add SHA512 SIMD units with arch guards (optional but safer cross-platform)
+if ARCH_x86
+hodlminer_SOURCES += sha512_sse2.c
+endif
+if ARCH_x86_64
+hodlminer_SOURCES += sha512_avx2.c
+endif
 
 hodlminer_LDFLAGS  = $(PTHREAD_FLAGS)
 hodlminer_LDADD    = @LIBCURL@ @JANSSON_LIBS@ @PTHREAD_LIBS@ @WS2_LIBS@ -lssl -lcrypto
